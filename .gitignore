@@ -1,0 +1,17 @@
+config.py
+*.db
+*.sqlite
+*.sqlite3
+bot_context_persistence
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+.idea/
+.vscode/
+*.swp
+*.swo

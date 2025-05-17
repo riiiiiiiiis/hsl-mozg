@@ -1,0 +1,15 @@
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+DB_NAME = "bookings.db"
+PERSISTENCE_FILEPATH = "./bot_context_persistence"
+ADMIN_CONTACT = "@your_admin_contact_or_link"
+
+# Реквизиты для оплаты - замените на ваши или примеры
+CARD_PAYMENT_DETAILS = "XXXX-YYYY-ZZZZ-WWWW (Имя Фамилия)"
+CARD_PAYMENT_AMOUNT = "1234 RUB"
+
+CRYPTO_WALLET_ADDRESS = "YOUR_USDT_TRC20_WALLET_ADDRESS_HERE"
+CRYPTO_PAYMENT_AMOUNT = "20 USDT"
+CRYPTO_NETWORK = "TRC-20 (Tron)"
+
+# ID чата для отправки уведомлений администратору
+TARGET_CHAT_ID = 0 # Замените на ID вашего чата (должно быть числом, например -1001234567890)
