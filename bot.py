@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 import sys
+from datetime import datetime
 import asyncio
 import urllib.request
 import urllib.error
@@ -25,25 +26,66 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Dedicated logger for course selections
+course_selection_logger = logging.getLogger('course_selection')
+course_selection_logger.setLevel(logging.INFO)
+# Create a file handler for the course selection logger
+course_log_handler = logging.FileHandler('course_selection.log')
+course_log_handler.setLevel(logging.INFO)
+# Create a formatter and set it for the handler
+course_log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+course_log_handler.setFormatter(course_log_formatter)
+# Add the handler to the logger
+course_selection_logger.addHandler(course_log_handler)
+course_selection_logger.propagate = False # Prevent logging to root logger as well
+
 BOOKING_DURATION_NOTICE = "Ваше место предварительно забронировано на 1 час. Пожалуйста, произведите оплату и отправьте фото чека в этот чат для подтверждения."
 
+COURSES = [
+    {
+        "id": "1",
+        "button_text": "Вайб кодинг",
+        "name": "Вайб кодинг",
+        "price_usd": 70,
+        "description": "На этом курсе в течение двух недель я учу превращать идеи в рабочие прототипы. Программируем на русском языке. Наглядно объясняю как работает ИИ, интернет и приложения. Общение в закрытой группе, домашки, три созвона с записями. Поддержка продолжается месяц после курса.\nПосле обучения ты будешь знать как создавать сайты с помощью ИИ, что такое база данных, как собрать телеграм бота за вечер и выложить проект в интернет. Набор промптов в подарок!\nДля кого: вообще для всех\nДлительность: две недели\nФормат: 2 двухчасовых созвона по средам в 20:00 МСК\nСтоимость: 70$\nСтарт: 28 мая\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
+    },
+    {
+        "id": "2",
+        "button_text": "Цифровое искусство и генеративный арт",
+        "name": "Цифровое искусство и генеративный арт",
+        "price_usd": 100,
+        "description": "Целый месяц смотрим картинки, обсуждаем зомби формализм, партизанский маркетинг в новой эре. Разбираемся что такое NFT и как создавать интерактивные генеративные системы, на которых можно зарабатывать.\nДля кого: для всех с чувством прекрасного и жаждой новых идей\nДлительность: месяц\nФормат: 4 часовых созвона по вторникам и четвергам (на выбор) в 20:00 МСК\nСтоимость: 100$\nСтарт: 3 июня\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
+    },
+    {
+        "id": "3",
+        "button_text": "Ончейн",
+        "name": "Ончейн",
+        "price_usd": 25,
+        "description": "Как завести крипто кошелек, пополнить его, спустить на мемкоины через децентрализованные биржи, сделать мемкоин про своего кота, а потом обналичить миллион.\nДля кого: для энтузиастов новой цифровой экономики\nФормат: полуторачасовое онлайн занятие в удобное для тебя время\nСтоимость: 25$\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
+    },
+    {
+        "id": "4",
+        "button_text": "ChatGPT",
+        "name": "ChatGPT",
+        "price_usd": 25,
+        "description": "Как использовать величайшее изобретение человечества на сто процентов.\nДля кого: для всех\nФормат: полуторачасовое онлайн занятие в удобное для тебя время\nСтоимость: 25$\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
+    }
+]
 
-COURSE_NAME = "Вайб Кодинг"
-COURSE_DATE_1 = "01.07.2025"
-COURSE_DATE_2 = "15.07.2025"
-COURSE_DESCRIPTION_TEST = "Это интенсивный курс, который поможет вам погрузиться в мир современного программирования, освоить ключевые технологии и создать свой первый проект. Мы сфокусируемся на практических навыках и актуальных инструментах."
-
-
-COURSE_1_TEXT = f"{COURSE_NAME} ({COURSE_DATE_1})"
-COURSE_2_TEXT = f"{COURSE_NAME} ({COURSE_DATE_2})"
-
+# Callback constants for course selection correspond to course 'id' or index
 CALLBACK_RESERVE_SPOT = "reserve_spot"
+CALLBACK_SELECT_COURSE_PREFIX = "select_course_" # Used to identify course selection callbacks
+# Individual callbacks like CALLBACK_SELECT_COURSE_1 are still used for clarity in button creation if needed
+# but logic will parse ID from callback string like "select_course_1", "select_course_2" etc.
 CALLBACK_SELECT_COURSE_1 = "select_course_1"
 CALLBACK_SELECT_COURSE_2 = "select_course_2"
+CALLBACK_SELECT_COURSE_3 = "select_course_3"
+CALLBACK_SELECT_COURSE_4 = "select_course_4"
 CALLBACK_CONFIRM_COURSE_SELECTION = "confirm_course_selection_v2"
 CALLBACK_BACK_TO_COURSE_SELECTION = "back_to_course_selection"
 CALLBACK_ADMIN_APPROVE_PAYMENT = "admin_approve_"
 CALLBACK_ADMIN_REJECT_PAYMENT = "admin_reject_"
+CALLBACK_CANCEL_RESERVATION = "cancel_reservation"
 
 def escape_markdown_v2(text: str) -> str:
     """Helper function to escape text for MarkdownV2 parsing."""
@@ -55,6 +97,17 @@ def get_db_connection():
     conn = sqlite3.connect(config.DB_NAME)
     conn.row_factory = sqlite3.Row
     try:
+        # Check if the course_id column exists
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(bookings)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'course_id' not in columns:
+            # Add course_id column if it doesn't exist
+            conn.execute("ALTER TABLE bookings ADD COLUMN course_id TEXT")
+            logger.info("Added course_id column to bookings table")
+        
+        # Create table if it doesn't exist
         conn.execute("""
             CREATE TABLE IF NOT EXISTS bookings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,6 +115,7 @@ def get_db_connection():
                 username TEXT,
                 first_name TEXT,
                 chosen_course TEXT,
+                course_id TEXT,
                 confirmed INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, chosen_course, created_at)
@@ -73,10 +127,9 @@ def get_db_connection():
     return conn
 
 def get_course_selection_keyboard() -> InlineKeyboardMarkup:
-    keyboard = [
-        [InlineKeyboardButton(COURSE_1_TEXT, callback_data=CALLBACK_SELECT_COURSE_1)],
-        [InlineKeyboardButton(COURSE_2_TEXT, callback_data=CALLBACK_SELECT_COURSE_2)],
-    ]
+    keyboard = []
+    for course in COURSES:
+        keyboard.append([InlineKeyboardButton(course["button_text"], callback_data=f"{CALLBACK_SELECT_COURSE_PREFIX}{course['id']}")])
     return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,25 +166,50 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == CALLBACK_RESERVE_SPOT or query.data == CALLBACK_BACK_TO_COURSE_SELECTION:
         reply_markup = get_course_selection_keyboard()
-        message_text = "Пожалуйста, выберите один из курсов:"
+        message_text = "Свободная касса! Сезон 2025 лето, открыты курсы для записи:"
         try:
             await query.edit_message_text(text=message_text, reply_markup=reply_markup)
         except Exception as e:
             logger.error(f"Error editing message for {query.data}: {e}", exc_info=True)
 
-    elif query.data == CALLBACK_SELECT_COURSE_1 or query.data == CALLBACK_SELECT_COURSE_2:
-        chosen_course_text = COURSE_1_TEXT if query.data == CALLBACK_SELECT_COURSE_1 else COURSE_2_TEXT
-        context.user_data['pending_course_choice'] = chosen_course_text
-        
-        escaped_course_text = escape_markdown_v2(chosen_course_text)
-        escaped_first_name = escape_markdown_v2(first_name)
-        escaped_course_description = escape_markdown_v2(COURSE_DESCRIPTION_TEST)
+    elif query.data.startswith(CALLBACK_SELECT_COURSE_PREFIX):
+        selected_course_id = query.data.replace(CALLBACK_SELECT_COURSE_PREFIX, "")
+        selected_course = next((course for course in COURSES if course["id"] == selected_course_id), None)
 
+        if not selected_course:
+            logger.warning(f"User {user_id} selected an invalid course ID: {selected_course_id}")
+            try:
+                await query.edit_message_text(text="Произошла ошибка. Пожалуйста, выберите курс заново.", reply_markup=get_course_selection_keyboard())
+            except Exception as e_corr:
+                logger.error(f"Error sending correction message for invalid course ID: {e_corr}", exc_info=True)
+            return
+
+        chosen_course_name = selected_course["name"]
+        course_description = selected_course["description"]
+        course_price_usd = selected_course["price_usd"]
+
+        # Log course selection
+        try:
+            log_message = (
+                f"UserID: {user_id} - Username: {username} - FirstName: {first_name} - "
+                f"CourseID: {selected_course_id} - CourseName: {chosen_course_name}"
+            )
+            course_selection_logger.info(log_message)
+        except Exception as log_e:
+            logger.error(f"Failed to log course selection for user {user_id} (Course: {selected_course_id}): {log_e}", exc_info=True)
+
+        context.user_data['pending_course_choice'] = chosen_course_name
+        context.user_data['pending_course_id'] = selected_course_id
+        context.user_data['pending_course_price_usd'] = course_price_usd
+        
+        escaped_course_name = escape_markdown_v2(chosen_course_name)
+        escaped_first_name = escape_markdown_v2(first_name)
+        escaped_course_description = escape_markdown_v2(course_description)
 
         message_text = (
-            f"Вы выбрали курс: *{escaped_course_text}*\n"
+            f"Вы выбрали курс: *{escaped_course_name}*\n"
             f"Имя: *{escaped_first_name}*\n\n"
-            f"*{escaped_course_description}*\n\n" # Test course description
+            f"*{escaped_course_description}*\n\n"
             "Подтверждаете свой выбор для предварительного бронирования?"
         )
         keyboard = [
@@ -148,10 +226,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_user_id = context.user_data.get('user_id', user_id)
         current_username = context.user_data.get('username', username)
         current_first_name = context.user_data.get('first_name', first_name)
-        chosen_course = context.user_data.get('pending_course_choice')
+        chosen_course_name = context.user_data.get('pending_course_choice')
+        course_id = context.user_data.get('pending_course_id')
+        course_price_usd_val = context.user_data.get('pending_course_price_usd') # Renamed to avoid conflict
 
-        if not chosen_course:
-            logger.warning(f"User {current_user_id} tried to confirm course, but 'pending_course_choice' not found.")
+        if not chosen_course_name or course_price_usd_val is None:
+            logger.warning(f"User {current_user_id} tried to confirm course, but 'pending_course_choice' or 'pending_course_price_usd' not found.")
             try:
                 await query.edit_message_text(text="Произошла ошибка. Пожалуйста, выберите курс заново.", reply_markup=get_course_selection_keyboard())
             except Exception as e_corr:
@@ -164,48 +244,74 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                """INSERT INTO bookings (user_id, username, first_name, chosen_course, confirmed)
-                   VALUES (?, ?, ?, ?, 0)""",
-                (current_user_id, current_username, current_first_name, chosen_course)
+                """INSERT INTO bookings (user_id, username, first_name, chosen_course, course_id, confirmed)
+                   VALUES (?, ?, ?, ?, ?, 0)""",
+                (current_user_id, current_username, current_first_name, chosen_course_name, course_id)
             )
             booking_id = cursor.lastrowid
             conn.commit()
-            logger.info(f"Preliminary booking ID {booking_id} for user {current_user_id} ({current_first_name}), course '{chosen_course}' saved (status 0).")
+            logger.info(f"Preliminary booking ID {booking_id} for user {current_user_id} ({current_first_name}), course '{chosen_course_name}' saved (status 0).")
 
             context.user_data[f'booking_id_{current_user_id}'] = booking_id
 
+            # Calculate payment amounts
+            price_kzt = round(course_price_usd_val * config.USD_TO_KZT_RATE, 2)
+            price_rub = round(course_price_usd_val * config.USD_TO_RUB_RATE, 2)
+            price_ars = round(course_price_usd_val * config.USD_TO_ARS_RATE, 2)
+
             # Escaping dynamic parts for MarkdownV2
-            esc_chosen_course = escape_markdown_v2(chosen_course)
+            esc_chosen_course_name = escape_markdown_v2(chosen_course_name)
             esc_booking_id = escape_markdown_v2(str(booking_id))
             esc_booking_duration_notice = escape_markdown_v2(BOOKING_DURATION_NOTICE)
-            
-            esc_card_details = escape_markdown_v2(config.CARD_PAYMENT_DETAILS)
-            esc_card_amount = escape_markdown_v2(config.CARD_PAYMENT_AMOUNT)
-            
-            crypto_wallet_md = f"`{config.CRYPTO_WALLET_ADDRESS}`" # Backticks for inline code, no need to escape address itself here
-            esc_crypto_amount = escape_markdown_v2(config.CRYPTO_PAYMENT_AMOUNT)
-            esc_crypto_network = escape_markdown_v2(config.CRYPTO_NETWORK) # CRYPTO_NETWORK might contain '-'
 
+            esc_tbank_card_number = escape_markdown_v2(config.TBANK_CARD_NUMBER)
+            esc_tbank_card_holder = escape_markdown_v2(config.TBANK_CARD_HOLDER)
+            esc_price_rub = escape_markdown_v2(f"{price_rub:.2f} RUB")
+
+            esc_kaspi_card_number = escape_markdown_v2(config.KASPI_CARD_NUMBER)
+            esc_price_kzt = escape_markdown_v2(f"{price_kzt:.2f} KZT")
+
+            esc_ars_alias = escape_markdown_v2(config.ARS_ALIAS)
+            esc_price_ars = escape_markdown_v2(f"{price_ars:.2f} ARS")
+            
+            esc_usdt_address = escape_markdown_v2(config.USDT_TRC20_ADDRESS)
+            esc_price_usdt = escape_markdown_v2(f"{course_price_usd_val:.2f} USDT") 
+            esc_crypto_network = escape_markdown_v2(config.CRYPTO_NETWORK)
+            esc_binance_id = escape_markdown_v2(config.BINANCE_ID)
 
             message_text = (
-                f"📝 Ваше место на курс '*{esc_chosen_course}*' предварительно забронировано \(Заявка №*{esc_booking_id}*\)\.\n\n"
+                f"📝 Ваше место на курс '*{esc_chosen_course_name}*' предварительно забронировано \\(Заявка №*{esc_booking_id}*\\)\.\n\n"
                 f"⏳ _{esc_booking_duration_notice}_\n\n"
                 f"💳 *Реквизиты для оплаты:*\n\n"
-                f"*Карта:*\n"
-                f"{esc_card_details}\n"
-                f"Сумма: `{esc_card_amount}`\n\n"
-                f"*Криптовалюта \(USDT TRC\\-20\):*\n" # Escaped hyphen in TRC-20
-                f"Кошелек: {crypto_wallet_md}\n"
-                f"Сумма: `{esc_crypto_amount}`\n"
-                f"Сеть: {esc_crypto_network}\n\n" # esc_crypto_network will handle escaping for "TRC-20 (Tron)"
+                f"*🇷🇺 Т\-Банк \\(RUB\\):*\n"
+                f"Карта: `{esc_tbank_card_number}`\n"
+                f"Получатель: {esc_tbank_card_holder}\n"
+                f"Сумма: `{esc_price_rub}`\n\n"
+                f"*🇰🇿 Kaspi \\(KZT\\):*\n"
+                f"Карта: `{esc_kaspi_card_number}`\n"
+                f"Сумма: `{esc_price_kzt}`\n\n"
+                f"*🇦🇷 Аргентинское Песо \\(ARS\\):*\n"
+                f"Alias: `{esc_ars_alias}`\n"
+                f"Сумма: `{esc_price_ars}`\n\n"
+                f"*💸 Криптовалюта \\(USDT TRC\\-20\\):*\n"
+                f"Адрес: `{esc_usdt_address}`\n"
+                f"Сеть: {esc_crypto_network}\n"
+                f"Сумма: `{esc_price_usdt}`\n"
+                f"Вы также можете оплатить по Binance ID: `{esc_binance_id}`\n\n"
                 f"_Пожалуйста, будьте внимательны при выборе сети для перевода USDT\._\n\n"
                 f"🧾 После оплаты, пожалуйста, отправьте фото чека прямо в этот чат\."
             )
 
-            await query.edit_message_text(text=message_text, reply_markup=None, parse_mode=ParseMode.MARKDOWN_V2)
+            keyboard_payment = [
+                [InlineKeyboardButton("❌ Отменить бронь", callback_data=f"{CALLBACK_CANCEL_RESERVATION}_{booking_id}")]
+            ]
+            reply_markup_payment = InlineKeyboardMarkup(keyboard_payment)
 
-            if 'pending_course_choice' in context.user_data:
-                del context.user_data['pending_course_choice']
+            await query.edit_message_text(text=message_text, reply_markup=reply_markup_payment, parse_mode=ParseMode.MARKDOWN_V2)
+
+            # Don't clear pending_course_choice, pending_course_id, pending_course_price_usd here.
+            # They are needed if the user cancels immediately after this message.
+            # They will be cleared upon successful payment confirmation by admin or by explicit cancellation.
         except sqlite3.IntegrityError:
              logger.warning(f"User {current_user_id} might have tried to book the same course again too quickly.")
              await query.edit_message_text(text="Вы уже подали заявку на этот курс. Ожидайте информации или свяжитесь с нами.", reply_markup=None)
@@ -215,6 +321,58 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e_gen:
             logger.error(f"Unexpected error for user {current_user_id}: {e_gen}", exc_info=True)
             await query.edit_message_text(text="⚠️ Произошла непредвиденная ошибка.")
+        finally:
+            if conn:
+                conn.close()
+
+    elif query.data.startswith(CALLBACK_CANCEL_RESERVATION):
+        parts = query.data.split('_')
+        try:
+            booking_id_to_cancel = int(parts[-1])
+        except (IndexError, ValueError):
+            logger.error(f"Invalid cancel reservation callback data: {query.data}")
+            await query.edit_message_text("Ошибка: Некорректные данные для отмены.")
+            return
+
+        current_user_id = context.user_data.get('user_id', user_id)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            # Update booking status to cancelled (e.g., confirmed = -1)
+            # We only cancel if it's in state 0 (pending payment)
+            cursor.execute(
+                "UPDATE bookings SET confirmed = -1 WHERE id = ? AND user_id = ? AND confirmed = 0", 
+                (booking_id_to_cancel, current_user_id)
+            )
+            if cursor.rowcount > 0:
+                conn.commit()
+                logger.info(f"User {current_user_id} cancelled booking ID {booking_id_to_cancel}.")
+                
+                # Clean up user_data related to this booking
+                if context.user_data.get(f'booking_id_{current_user_id}') == booking_id_to_cancel:
+                    del context.user_data[f'booking_id_{current_user_id}']
+                if 'pending_course_choice' in context.user_data:
+                    del context.user_data['pending_course_choice']
+                if 'pending_course_id' in context.user_data:
+                    del context.user_data['pending_course_id']
+                if 'pending_course_price_usd' in context.user_data:
+                    del context.user_data['pending_course_price_usd']
+
+                message_text = "Ваше предварительное бронирование отменено."
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Выбрать другой курс", callback_data=CALLBACK_BACK_TO_COURSE_SELECTION)]])
+                await query.edit_message_text(text=message_text, reply_markup=reply_markup)
+            else:
+                logger.warning(f"User {current_user_id} tried to cancel booking ID {booking_id_to_cancel}, but it was not found or not in a cancellable state (confirmed=0).")
+                await query.edit_message_text(text="Не удалось отменить бронирование. Возможно, оно уже обработано или отменено.")
+        
+        except sqlite3.Error as e_db:
+            logger.error(f"DB error during cancellation for booking {booking_id_to_cancel}: {e_db}", exc_info=True)
+            await query.edit_message_text("Ошибка базы данных при отмене бронирования.")
+        except Exception as e:
+            logger.error(f"Error during cancellation for booking {booking_id_to_cancel}: {e}", exc_info=True)
+            await query.edit_message_text("Произошла ошибка при отмене бронирования.")
         finally:
             if conn:
                 conn.close()
