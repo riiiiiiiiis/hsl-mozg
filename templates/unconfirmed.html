@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Неподтвержденные участники - Админ панель{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">⏳ Неподтвержденные участники</h1>
+
+{% for status_code, status_info in statuses.items() %}
+    {% if status_info.participants %}
+    <div class="card mb-4">
+        <div class="card-header bg-{{ status_info.color }} text-white">
+            <h5 class="mb-0">{{ status_info.icon }} {{ status_info.name }} 
+                <span class="badge bg-white text-dark">{{ status_info.participants|length }} чел.</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for participant in status_info.participants %}
+                <div class="col-md-6">
+                    <div class="user-card {% if participant.is_overdue %}overdue{% endif %}">
+                        <strong>{{ participant.first_name or 'Без имени' }}</strong>
+                        {% if participant.username %}
+                            <span class="text-muted">@{{ participant.username }}</span>
+                        {% endif %}
+                        <br>
+                        <small>
+                            📚 {{ participant.chosen_course }}<br>
+                            ID: {{ participant.user_id }}<br>
+                            Дата: {{ participant.created_at }}<br>
+                            <span class="{% if participant.is_overdue %}text-danger{% else %}text-muted{% endif %}">
+                                Прошло: {{ participant.days_passed }} дн. {{ participant.hours_passed }} ч.
+                                {% if participant.is_overdue %}
+                                    <strong>⚠️ Не оплатил более суток!</strong>
+                                {% endif %}
+                            </span>
+                        </small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+{% if not statuses[0].participants and not statuses[1].participants and not statuses[-1].participants %}
+<div class="alert alert-success">
+    Все участники подтвердили оплату! 🎉
+</div>
+{% endif %}
+{% endblock %}

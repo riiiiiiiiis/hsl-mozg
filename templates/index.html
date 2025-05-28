@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика - Админ панель{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">📊 Общая статистика</h1>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card stat-card bg-primary text-white">
+            <h2>{{ total }}</h2>
+            <p class="mb-0">Всего бронирований</p>
+        </div>
+    </div>
+    
+    {% for stat in status_data %}
+    <div class="col-md-3">
+        <div class="card stat-card bg-{{ stat.color }} text-white">
+            <h2>{{ stat.count }}</h2>
+            <p class="mb-0">{{ stat.icon }} {{ stat.name }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>📚 Распределение по курсам</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Курс</th>
+                            <th>Количество</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for course in course_stats %}
+                        <tr>
+                            <td>{{ course.chosen_course }}</td>
+                            <td><span class="badge bg-primary">{{ course.count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>🕐 Последние регистрации</h5>
+                <button class="btn btn-sm btn-danger" onclick="deleteTestUsers()">🗑️ Удалить тестовые</button>
+            </div>
+            <div class="card-body">
+                <div style="max-height: 400px; overflow-y: auto;">
+                    {% for booking in recent_bookings %}
+                    <div class="user-card">
+                        <strong>{{ booking.first_name or 'Без имени' }}</strong>
+                        {% if booking.username %}
+                            <span class="text-muted">@{{ booking.username }}</span>
+                        {% endif %}
+                        <br>
+                        <small>
+                            📚 {{ booking.chosen_course }}<br>
+                            {{ status_names[booking.confirmed|string].icon }} {{ status_names[booking.confirmed|string].name }}<br>
+                            🕐 {{ booking.created_at }}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

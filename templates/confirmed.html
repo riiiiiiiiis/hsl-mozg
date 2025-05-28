@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Подтвержденные участники - Админ панель{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">✅ Подтвержденные участники</h1>
+
+<div class="alert alert-success">
+    <strong>Всего подтверждено:</strong> {{ total }} участников
+</div>
+
+{% if user_ids %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>💬 User IDs для рассылки</h5>
+    </div>
+    <div class="card-body">
+        <code>{{ user_ids }}</code>
+        <br><br>
+        <a href="/prepare-messaging" class="btn btn-primary">Подготовить рассылку</a>
+    </div>
+</div>
+{% endif %}
+
+{% for course_name, participants in courses.items() %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>📚 {{ course_name }} <span class="badge bg-primary">{{ participants|length }} чел.</span></h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for participant in participants %}
+            <div class="col-md-6">
+                <div class="user-card">
+                    <strong>{{ participant.first_name or 'Без имени' }}</strong>
+                    {% if participant.username %}
+                        <span class="text-muted">@{{ participant.username }}</span>
+                    {% endif %}
+                    <br>
+                    <small class="text-muted">
+                        ID: {{ participant.user_id }}<br>
+                        Дата: {{ participant.created_at }}
+                    </small>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% if not courses %}
+<div class="alert alert-warning">
+    Нет подтвержденных участников
+</div>
+{% endif %}
+{% endblock %}

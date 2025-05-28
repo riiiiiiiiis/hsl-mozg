@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Подготовка рассылки - Админ панель{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">💬 Подготовка рассылки</h1>
+
+<div class="alert alert-warning">
+    <strong>⚠️ Внимание!</strong> Сейчас рассылка работает в тестовом режиме. Сообщения НЕ отправляются!
+    <br><br>
+    Для реальной отправки нужно раскомментировать строки 61-66 в файле <code>send_message_to_confirmed.py</code>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>📝 Результат подготовки рассылки</h5>
+    </div>
+    <div class="card-body">
+        {% if output %}
+        <h6>Вывод:</h6>
+        <pre class="bg-light p-3">{{ output }}</pre>
+        {% endif %}
+        
+        {% if error %}
+        <h6 class="text-danger">Ошибки:</h6>
+        <pre class="bg-light p-3 text-danger">{{ error }}</pre>
+        {% endif %}
+        
+        {% if not output and not error %}
+        <p>Нет данных для отображения</p>
+        {% endif %}
+    </div>
+    <div class="card-footer">
+        <a href="/" class="btn btn-secondary">Вернуться к статистике</a>
+        <a href="/confirmed" class="btn btn-primary">Посмотреть подтвержденных</a>
+    </div>
+</div>
+{% endblock %}

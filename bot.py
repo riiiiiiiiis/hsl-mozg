@@ -65,6 +65,9 @@ COURSES = [
     }
 ]
 
+# Constants for calendar link and other URLs
+CALENDAR_LINK = "https://calendar.app.google/gYhZNcreyWrAuEgT9"
+
 # Callback constants for course selection correspond to course 'id' or index
 CALLBACK_RESERVE_SPOT = "reserve_spot"
 CALLBACK_SELECT_COURSE_PREFIX = "select_course_" # Used to identify course selection callbacks
@@ -404,11 +407,47 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"✅ Оплата для заявки №*{esc_booking_id_approved}* \(Пользователь *{esc_target_user_id}*\) ПОДТВЕРЖДЕНА\.",
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
-                await context.bot.send_message(
-                    chat_id=target_user_id,
-                    text=f"🎉 Поздравляем\! Ваша оплата по заявке №*{esc_booking_id_approved}* подтверждена\. Место забронировано\!",
-                    parse_mode=ParseMode.MARKDOWN_V2
+                
+                # Get course details to check if it's a consultation
+                cursor.execute(
+                    "SELECT chosen_course, course_id FROM bookings WHERE id = ?",
+                    (booking_id_to_approve,)
                 )
+                booking_details = cursor.fetchone()
+                
+                if booking_details:
+                    chosen_course = booking_details[0]
+                    course_id = booking_details[1]
+                    
+                    # Check if this is a consultation (ids 3 and 4 are consultations)
+                    is_consultation = course_id in ["3", "4"]
+                    
+                    if is_consultation:
+                        # For consultations, send message with calendar link
+                        esc_calendar_link = escape_markdown_v2(CALENDAR_LINK)
+                        esc_chosen_course = escape_markdown_v2(chosen_course)
+                        
+                        await context.bot.send_message(
+                            chat_id=target_user_id,
+                            text=f"🎉 Поздравляем\! Ваша оплата за консультацию *{esc_chosen_course}* \(заявка №*{esc_booking_id_approved}*\) подтверждена\!\n\n"
+                                 f"Пожалуйста, выберите удобное для вас время для проведения консультации по ссылке:\n"
+                                 f"{esc_calendar_link}",
+                            parse_mode=ParseMode.MARKDOWN_V2
+                        )
+                    else:
+                        # For regular courses, send standard confirmation
+                        await context.bot.send_message(
+                            chat_id=target_user_id,
+                            text=f"🎉 Поздравляем\! Ваша оплата по заявке №*{esc_booking_id_approved}* подтверждена\. Место забронировано\!",
+                            parse_mode=ParseMode.MARKDOWN_V2
+                        )
+                else:
+                    # Fallback if booking details not found
+                    await context.bot.send_message(
+                        chat_id=target_user_id,
+                        text=f"🎉 Поздравляем\! Ваша оплата по заявке №*{esc_booking_id_approved}* подтверждена\.",
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
             else:
                 logger.warning(f"Admin {user_id} tried to approve booking ID {booking_id_to_approve} for user {target_user_id}, but no matching pending record found or already processed.")
                 await query.edit_message_text(f"⚠️ Заявка №{booking_id_to_approve} (Пользователь {target_user_id}) не найдена для подтверждения или уже обработана.")
