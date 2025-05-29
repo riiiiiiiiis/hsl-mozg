@@ -5,7 +5,10 @@ from datetime import datetime
 import asyncio
 import urllib.request
 import urllib.error
+import random
+import string
 import config
+import referral_config
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode # Import ParseMode
 from telegram.error import Conflict
@@ -46,22 +49,8 @@ COURSES = [
         "id": "1",
         "button_text": "Вайб Кодинг",
         "name": "Вайб кодинг",
-        "price_usd": 70,
-        "description": "На этом курсе в течение двух недель я учу превращать идеи в рабочие прототипы. Программируем на русском языке. Наглядно объясняю как работает ИИ, интернет и приложения. Общение в закрытой группе, домашки, три созвона с записями. Поддержка продолжается месяц после курса.\nПосле обучения ты будешь знать как создавать сайты с помощью ИИ, что такое база данных, как собрать телеграм бота за вечер и выложить проект в интернет. Набор промптов в подарок!\nДля кого: вообще для всех\nДлительность: две недели\nФормат: 2 двухчасовых созвона по средам в 20:00 МСК\nСтоимость: 70$\nСтарт: 28 мая\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек.\n\nЧто дальше: После оплаты я добавлю тебя в закрытую группу, где мы будем общаться и делиться материалами. Перед стартом курса пришлю всю необходимую информацию."
-    },
-    {
-        "id": "3",
-        "button_text": "Блокчейн консультация",
-        "name": "Блокчейн (разовая консультация)",
-        "price_usd": 25,
-        "description": "Как завести крипто кошелек, пополнить его, спустить на мемкоины через децентрализованные биржи, сделать мемкоин про своего кота, а потом обналичить миллион.\nДля кого: для энтузиастов новой цифровой экономики\nФормат: полуторачасовое онлайн занятие в удобное для тебя время\nСтоимость: 25$\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
-    },
-    {
-        "id": "4",
-        "button_text": "ChatGPT консультация",
-        "name": "ChatGPT (разовая консультация)",
-        "price_usd": 25,
-        "description": "Как использовать величайшее изобретение человечества на сто процентов.\nДля кого: для всех\nФормат: полуторачасовое онлайн занятие в удобное для тебя время\nСтоимость: 25$\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек."
+        "price_usd": 150,
+        "description": "На этом курсе в течение двух недель я учу превращать идеи в рабочие прототипы. Программируем на русском языке. Наглядно объясняю как работает ИИ, интернет и приложения. Общение в закрытой группе, домашки, три созвона с записями. Поддержка продолжается месяц после курса.\nПосле обучения ты будешь знать как создавать сайты с помощью ИИ, что такое база данных, как собрать телеграм бота за вечер и выложить проект в интернет. Набор промптов в подарок!\nДля кого: вообще для всех\nДлительность: три недели\nФормат: 3 практических лекции по пятницам или средам в 20:00 МСК\nСтоимость: 150$\nСтарт: 30 мая\n\nОплата возможна переводом на карты Т-Банка, Каспи или в USDT на крипто кошелек.\n\nЧто дальше: После оплаты я добавлю тебя в закрытую группу, где мы будем общаться и делиться материалами. Перед стартом курса пришлю всю необходимую информацию."
     }
 ]
 
@@ -103,6 +92,23 @@ def get_db_connection():
             conn.execute("ALTER TABLE bookings ADD COLUMN course_id TEXT")
             logger.info("Added course_id column to bookings table")
         
+        # Check if referral_code column exists
+        if 'referral_code' not in columns:
+            conn.execute("ALTER TABLE bookings ADD COLUMN referral_code TEXT")
+            logger.info("Added referral_code column to bookings table")
+        
+        if 'discount_percent' not in columns:
+            conn.execute("ALTER TABLE bookings ADD COLUMN discount_percent INTEGER DEFAULT 0")
+            logger.info("Added discount_percent column to bookings table")
+        
+        # Check if name column exists in referral_coupons table
+        cursor.execute(f"PRAGMA table_info({referral_config.REFERRAL_TABLE_NAME})")
+        ref_columns = [column[1] for column in cursor.fetchall()]
+        
+        if ref_columns and 'name' not in ref_columns:
+            conn.execute(f"ALTER TABLE {referral_config.REFERRAL_TABLE_NAME} ADD COLUMN name TEXT")
+            logger.info("Added name column to referral_coupons table")
+        
         # Create table if it doesn't exist
         conn.execute("""
             CREATE TABLE IF NOT EXISTS bookings (
@@ -114,13 +120,114 @@ def get_db_connection():
                 course_id TEXT,
                 confirmed INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                referral_code TEXT,
+                discount_percent INTEGER DEFAULT 0,
                 UNIQUE(user_id, chosen_course, created_at)
             )
         """)
+        
+        # Create referral coupons table
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {referral_config.REFERRAL_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT,
+                discount_percent INTEGER NOT NULL,
+                max_activations INTEGER NOT NULL,
+                current_activations INTEGER DEFAULT 0,
+                created_by INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+        
+        # Create referral usage tracking table
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {referral_config.REFERRAL_USAGE_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                coupon_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                booking_id INTEGER,
+                used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (coupon_id) REFERENCES {referral_config.REFERRAL_TABLE_NAME}(id),
+                FOREIGN KEY (booking_id) REFERENCES bookings(id),
+                UNIQUE(coupon_id, user_id)
+            )
+        """)
+        
         conn.commit()
     except sqlite3.Error as e:
         logger.error(f"Database table creation/check error: {e}")
     return conn
+
+def generate_referral_code():
+    """Generate a unique referral code"""
+    while True:
+        code = ''.join(random.choices(referral_config.REFERRAL_CODE_CHARS, k=referral_config.REFERRAL_CODE_LENGTH))
+        # Check if code already exists
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT id FROM {referral_config.REFERRAL_TABLE_NAME} WHERE code = ?", (code,))
+        if not cursor.fetchone():
+            conn.close()
+            return code
+        conn.close()
+
+def validate_referral_code(code, user_id):
+    """Validate a referral code and return discount info if valid"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if code exists and is active
+    cursor.execute(f"""
+        SELECT id, discount_percent, max_activations, current_activations 
+        FROM {referral_config.REFERRAL_TABLE_NAME} 
+        WHERE code = ? AND is_active = 1
+    """, (code,))
+    
+    coupon = cursor.fetchone()
+    if not coupon:
+        conn.close()
+        return None, "not_found"
+    
+    # Check if coupon has remaining activations
+    if coupon['current_activations'] >= coupon['max_activations']:
+        conn.close()
+        return None, "expired"
+    
+    conn.close()
+    return {
+        'id': coupon['id'],
+        'discount_percent': coupon['discount_percent']
+    }, "valid"
+
+def apply_referral_discount(coupon_id, user_id, booking_id):
+    """Apply referral discount to a booking"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Record usage
+        cursor.execute(f"""
+            INSERT INTO {referral_config.REFERRAL_USAGE_TABLE_NAME} 
+            (coupon_id, user_id, booking_id) VALUES (?, ?, ?)
+        """, (coupon_id, user_id, booking_id))
+        
+        # Increment activation count
+        cursor.execute(f"""
+            UPDATE {referral_config.REFERRAL_TABLE_NAME} 
+            SET current_activations = current_activations + 1 
+            WHERE id = ?
+        """, (coupon_id,))
+        
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Error applying referral discount: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
 
 def get_course_selection_keyboard() -> InlineKeyboardMarkup:
     keyboard = []
@@ -129,18 +236,62 @@ def get_course_selection_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("Посмотреть доступные курсы", callback_data=CALLBACK_RESERVE_SPOT)]]
+    user = update.message.from_user
+    user_id = user.id
+    
+    # Check if user came with a referral code
+    if context.args and len(context.args) > 0:
+        start_param = context.args[0]
+        if start_param.startswith(referral_config.REFERRAL_START_PARAMETER):
+            referral_code = start_param[len(referral_config.REFERRAL_START_PARAMETER):]
+            
+            # Validate the referral code
+            coupon_info, status = validate_referral_code(referral_code, user_id)
+            
+            if status == "valid":
+                # Store the referral code in user context
+                context.user_data['pending_referral_code'] = referral_code
+                context.user_data['pending_referral_info'] = coupon_info
+                
+                # Получаем информацию об оставшихся активациях и название
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(f"""
+                    SELECT name, max_activations, current_activations 
+                    FROM {referral_config.REFERRAL_TABLE_NAME} 
+                    WHERE id = ?
+                """, (coupon_info['id'],))
+                coupon_details = cursor.fetchone()
+                conn.close()
+                
+                remaining = coupon_details['max_activations'] - coupon_details['current_activations']
+                coupon_name = coupon_details['name']
+                
+                discount_msg = referral_config.REFERRAL_APPLIED_MESSAGE.format(
+                    discount=coupon_info['discount_percent']
+                )
+                if coupon_name:
+                    discount_msg += f"\n🏷️ Купон: {coupon_name}"
+                discount_msg += f"\n📊 Осталось активаций: {remaining}"
+                
+                await update.message.reply_text(discount_msg)
+            elif status == "expired" or status == "not_found":
+                await update.message.reply_text(referral_config.REFERRAL_EXPIRED_MESSAGE)
+    
+    keyboard = [[InlineKeyboardButton("Посмотреть программу", callback_data=CALLBACK_RESERVE_SPOT)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     try:
         if update.message:
             await update.message.reply_text(
                 "Привет! Добро пожаловать в школу HashSlash! 👋\n\n"
-                "Меня зовут Сережа, и последние 10 лет я помогаю людям осваивать современные инструменты и технологии.\n\n"
-                "Сейчас я открыл набор в группу по вайбкодингу. Вайбкодинг – это новый способ создавать приложения и сайты, не тратя годы на изучение программирования.\n\n"
+                "Меня зовут Сережа, я основатель креативной студии <a href='https://hsl.sh/'> хсл щ</a>. Последние 10 лет я помогаю людям осваивать современные инструменты и технологии.\n\n"
+                "Сейчас я открыл набор в группу по <b>вайбкодингу</b>. Вайбкодинг – это новый способ создавать приложения и сайты, не тратя годы на изучение программирования.\n\n"
                 "Представьте: вы просто рассказываете искусственному интеллекту (ИИ) на обычном языке, каким должно быть ваше приложение или сайт, а он сам создаёт всё за вас.\n\n"
                 "Вы – как режиссёр, который задаёт идею и направление. Вам не нужно разбираться в коде или технических деталях – вы сосредотачиваетесь на том, что делает ваш продукт крутым: его дизайн, удобство и ценность для пользователей.\n\n"
                 "Вайбкодинг открывает разработку для всех, кто хочет воплотить свои идеи, даже без технических навыков.",
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                parse_mode='HTML',
+                disable_web_page_preview=True
             )
     except Exception as e:
         logger.error(f"Error in start_command: {e}", exc_info=True)
@@ -165,13 +316,92 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['username'] = username
     context.user_data['first_name'] = first_name
 
-    if query.data == CALLBACK_RESERVE_SPOT or query.data == CALLBACK_BACK_TO_COURSE_SELECTION:
-        reply_markup = get_course_selection_keyboard()
-        message_text = "Свободная касса! Сезон 2025 лето, открыты курсы для записи.\n\nЯ провожу групповые курсы и индивидуальные консультации по различным темам. Сейчас я набираю группу на курс по вайбкодингу, а также доступны индивидуальные консультации по другим направлениям. Выберите интересующий вас вариант:"
+    if query.data == CALLBACK_RESERVE_SPOT:
+        # Поскольку у нас только один курс, сразу показываем его
+        selected_course = COURSES[0]  # Берем первый и единственный курс
+        
+        chosen_course_name = selected_course["name"]
+        course_description = selected_course["description"]
+        course_price_usd = selected_course["price_usd"]
+        
+        context.user_data['pending_course_choice'] = chosen_course_name
+        context.user_data['pending_course_id'] = selected_course["id"]
+        context.user_data['pending_course_price_usd'] = course_price_usd
+        
+        # Проверяем, есть ли активная скидка
+        referral_info = context.user_data.get('pending_referral_info')
+        price_info = ""
+        
+        if referral_info:
+            discount_percent = referral_info['discount_percent']
+            discounted_price = course_price_usd * (1 - discount_percent / 100)
+            
+            price_info = (
+                f"\n💰 Стоимость: <s>${course_price_usd}</s> "
+                f"<b>${discounted_price:.0f}</b> (скидка {discount_percent}%)\n"
+            )
+        else:
+            price_info = f"\n💰 Стоимость: <b>${course_price_usd}</b>\n"
+
+        # Форматируем описание курса с использованием HTML разметки
+        formatted_description = course_description.replace(
+            'На этом курсе в течение двух недель я учу превращать идеи в рабочие прототипы.',
+            '<b>На этом курсе в течение двух недель я учу превращать идеи в рабочие прототипы.</b>'
+        ).replace(
+            'После обучения ты будешь знать',
+            '<b>После обучения ты будешь знать</b>'
+        ).replace(
+            'Для кого:',
+            '<b>Для кого:</b>'
+        ).replace(
+            'Длительность:',
+            '<b>Длительность:</b>'
+        ).replace(
+            'Формат:',
+            '<b>Формат:</b>'
+        ).replace(
+            'Стоимость:',
+            '<b>Стоимость:</b>'
+        ).replace(
+            'Старт:',
+            '<b>Старт:</b>'
+        ).replace(
+            'Что дальше:',
+            '<b>Что дальше:</b>'
+        )
+        
+        message_text = (
+            f"<b>Курс:</b> {chosen_course_name}\n"
+            f"<b>Имя:</b> {first_name}\n"
+            f"<b>Дата старта:</b> 30 мая\n"
+            f"{price_info}\n"
+            f"{formatted_description}"
+        )
+        keyboard = [
+            [InlineKeyboardButton("✅ Забронировать место", callback_data=CALLBACK_CONFIRM_COURSE_SELECTION)],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         try:
-            await query.edit_message_text(text=message_text, reply_markup=reply_markup)
+            await query.edit_message_text(
+                text=message_text, 
+                reply_markup=reply_markup, 
+                parse_mode='HTML',
+                disable_web_page_preview=True
+            )
         except Exception as e:
-            logger.error(f"Error editing message for {query.data}: {e}", exc_info=True)
+            logger.error(f"Error editing message for course selection confirmation: {e}", exc_info=True)
+    
+    elif query.data == "back_to_start":
+        # Возврат к начальному сообщению
+        keyboard = [[InlineKeyboardButton("Посмотреть программу", callback_data=CALLBACK_RESERVE_SPOT)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "Привет! Добро пожаловать в школу HashSlash! 👋\n\n"
+            "Меня зовут Сережа, я основатель креативной студии hsl sh. Последние 10 лет я помогаю людям осваивать современные инструменты и технологии.\n\n"
+            "Сейчас я открыл набор в группу по вайбкодингу. Вайбкодинг – это новый способ создавать приложения и сайты, не тратя годы на изучение программирования.",
+            reply_markup=reply_markup
+        )
 
     elif query.data.startswith(CALLBACK_SELECT_COURSE_PREFIX):
         selected_course_id = query.data.replace(CALLBACK_SELECT_COURSE_PREFIX, "")
@@ -206,10 +436,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         escaped_course_name = escape_markdown_v2(chosen_course_name)
         escaped_first_name = escape_markdown_v2(first_name)
         escaped_course_description = escape_markdown_v2(course_description)
+        
+        # Проверяем, есть ли активная скидка
+        referral_info = context.user_data.get('pending_referral_info')
+        price_info = ""
+        
+        if referral_info:
+            discount_percent = referral_info['discount_percent']
+            discounted_price = course_price_usd * (1 - discount_percent / 100)
+            
+            escaped_original_price = escape_markdown_v2(f"${course_price_usd}")
+            escaped_discounted_price = escape_markdown_v2(f"${discounted_price:.0f}")
+            escaped_discount = escape_markdown_v2(f"{discount_percent}%")
+            
+            price_info = (
+                f"\n💰 Стоимость: ~{escaped_original_price}~ "
+                f"*{escaped_discounted_price}* \(скидка {escaped_discount}\)\n"
+            )
+        else:
+            escaped_price = escape_markdown_v2(f"${course_price_usd}")
+            price_info = f"\n💰 Стоимость: *{escaped_price}*\n"
 
         message_text = (
             f"Вы выбрали курс: *{escaped_course_name}*\n"
-            f"Имя: *{escaped_first_name}*\n\n"
+            f"Имя: *{escaped_first_name}*\n"
+            f"{price_info}\n"
             f"*{escaped_course_description}*\n\n"
             "Подтверждаете свой выбор для предварительного бронирования?"
         )
@@ -244,21 +495,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
+            
+            # Check for pending referral discount
+            referral_code = context.user_data.get('pending_referral_code')
+            referral_info = context.user_data.get('pending_referral_info')
+            discount_percent = 0
+            
+            if referral_code and referral_info:
+                discount_percent = referral_info['discount_percent']
+            
             cursor.execute(
-                """INSERT INTO bookings (user_id, username, first_name, chosen_course, course_id, confirmed)
-                   VALUES (?, ?, ?, ?, ?, 0)""",
-                (current_user_id, current_username, current_first_name, chosen_course_name, course_id)
+                """INSERT INTO bookings (user_id, username, first_name, chosen_course, course_id, confirmed, referral_code, discount_percent)
+                   VALUES (?, ?, ?, ?, ?, 0, ?, ?)""",
+                (current_user_id, current_username, current_first_name, chosen_course_name, course_id, referral_code, discount_percent)
             )
             booking_id = cursor.lastrowid
             conn.commit()
-            logger.info(f"Preliminary booking ID {booking_id} for user {current_user_id} ({current_first_name}), course '{chosen_course_name}' saved (status 0).")
+            logger.info(f"Preliminary booking ID {booking_id} for user {current_user_id} ({current_first_name}), course '{chosen_course_name}' saved (status 0). Discount: {discount_percent}%")
 
             context.user_data[f'booking_id_{current_user_id}'] = booking_id
 
-            # Calculate payment amounts
-            price_kzt = round(course_price_usd_val * config.USD_TO_KZT_RATE, 2)
-            price_rub = round(course_price_usd_val * config.USD_TO_RUB_RATE, 2)
-            price_ars = round(course_price_usd_val * config.USD_TO_ARS_RATE, 2)
+            # Apply discount if any
+            discounted_price_usd = course_price_usd_val
+            if discount_percent > 0:
+                discounted_price_usd = course_price_usd_val * (1 - discount_percent / 100)
+                # Apply the referral discount
+                if referral_info:
+                    apply_referral_discount(referral_info['id'], current_user_id, booking_id)
+
+            # Calculate payment amounts with discount
+            price_kzt = round(discounted_price_usd * config.USD_TO_KZT_RATE, 2)
+            price_rub = round(discounted_price_usd * config.USD_TO_RUB_RATE, 2)
+            price_ars = round(discounted_price_usd * config.USD_TO_ARS_RATE, 2)
 
             # Escaping dynamic parts for MarkdownV2
             esc_chosen_course_name = escape_markdown_v2(chosen_course_name)
@@ -276,12 +544,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             esc_price_ars = escape_markdown_v2(f"{price_ars:.2f} ARS")
             
             esc_usdt_address = escape_markdown_v2(config.USDT_TRC20_ADDRESS)
-            esc_price_usdt = escape_markdown_v2(f"{course_price_usd_val:.2f} USDT") 
+            esc_price_usdt = escape_markdown_v2(f"{discounted_price_usd:.2f} USDT") 
             esc_crypto_network = escape_markdown_v2(config.CRYPTO_NETWORK)
             esc_binance_id = escape_markdown_v2(config.BINANCE_ID)
 
+            # Add discount info to message if applicable
+            discount_info = ""
+            if discount_percent > 0:
+                esc_discount_percent = escape_markdown_v2(str(discount_percent))
+                esc_original_price = escape_markdown_v2(f"{course_price_usd_val:.2f}")
+                esc_discounted_price = escape_markdown_v2(f"{discounted_price_usd:.2f}")
+                discount_info = (
+                    f"🎉 *Применена скидка {esc_discount_percent}%\!*\n"
+                    f"Исходная цена: ~${esc_original_price}~\n"
+                    f"Цена со скидкой: *${esc_discounted_price}*\n\n"
+                )
+
             message_text = (
                 f"📝 Ваше место на курс '*{esc_chosen_course_name}*' предварительно забронировано \(Заявка №*{esc_booking_id}*\)\.\n\n" 
+                f"{discount_info}"
                 f"⏳ _{esc_booking_duration_notice}_\n\n" 
                 f"💳 *Реквизиты для оплаты:*\n\n" 
                 f"*🇷🇺 Т\-Банк \(RUB\):*\n" 
@@ -360,6 +641,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     del context.user_data['pending_course_id']
                 if 'pending_course_price_usd' in context.user_data:
                     del context.user_data['pending_course_price_usd']
+                if 'pending_referral_code' in context.user_data:
+                    del context.user_data['pending_referral_code']
+                if 'pending_referral_info' in context.user_data:
+                    del context.user_data['pending_referral_info']
 
                 message_text = "Ваше предварительное бронирование отменено."
                 reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Выбрать другой курс", callback_data=CALLBACK_BACK_TO_COURSE_SELECTION)]])
@@ -551,6 +836,146 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
 
 
+async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Create a new referral coupon"""
+    user = update.message.from_user
+    user_id = user.id
+    
+    # Check if user is admin
+    if referral_config.REFERRAL_ADMIN_IDS and user_id not in referral_config.REFERRAL_ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для создания реферальных купонов.")
+        return
+    
+    # Parse command arguments
+    if not context.args or len(context.args) < 2:
+        available_discounts = ", ".join([f"{k}%" for k in referral_config.REFERRAL_DISCOUNTS.keys()])
+        await update.message.reply_text(
+            f"Использование: /create_referral <процент_скидки> <количество_активаций>\n\n"
+            f"Доступные скидки: {available_discounts}\n"
+            f"Пример: /create_referral 10 50"
+        )
+        return
+    
+    try:
+        discount_percent = int(context.args[0])
+        max_activations = int(context.args[1])
+        
+        if discount_percent not in referral_config.REFERRAL_DISCOUNTS:
+            available_discounts = ", ".join([f"{k}%" for k in referral_config.REFERRAL_DISCOUNTS.keys()])
+            await update.message.reply_text(f"❌ Недопустимый процент скидки. Доступные: {available_discounts}")
+            return
+        
+        if max_activations <= 0:
+            await update.message.reply_text("❌ Количество активаций должно быть больше 0.")
+            return
+        
+        # Generate unique referral code
+        code = generate_referral_code()
+        
+        # Save to database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""INSERT INTO {referral_config.REFERRAL_TABLE_NAME} 
+            (code, discount_percent, max_activations, created_by) 
+            VALUES (?, ?, ?, ?)""",
+            (code, discount_percent, max_activations, user_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        # Get bot username for link generation
+        bot_username = context.bot.username
+        referral_link = f"https://t.me/{bot_username}?start={referral_config.REFERRAL_START_PARAMETER}{code}"
+        
+        escaped_link = escape_markdown_v2(referral_link)
+        escaped_code = escape_markdown_v2(code)
+        
+        await update.message.reply_text(
+            f"✅ Реферальный купон создан\!\n\n"
+            f"📎 Код: `{escaped_code}`\n"
+            f"💸 Скидка: {discount_percent}%\n"
+            f"🔢 Количество активаций: {max_activations}\n\n"
+            f"🔗 Реферальная ссылка:\n`{escaped_link}`",
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+        
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат команды. Используйте числа для процента и количества.")
+    except Exception as e:
+        logger.error(f"Error in create_referral_command: {e}", exc_info=True)
+        await update.message.reply_text("❌ Произошла ошибка при создании купона.")
+
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сбросить текущую сессию и начать заново"""
+    # Очищаем все данные пользователя
+    context.user_data.clear()
+    
+    await update.message.reply_text(
+        "🔄 Ваша сессия сброшена. Вы можете начать заново.\n\n"
+        "Используйте /start для начала работы."
+    )
+
+async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show referral statistics"""
+    user = update.message.from_user
+    user_id = user.id
+    
+    # Check if user is admin
+    if referral_config.REFERRAL_ADMIN_IDS and user_id not in referral_config.REFERRAL_ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для просмотра статистики купонов.")
+        return
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get all coupons statistics
+        cursor.execute(f"""
+            SELECT code, discount_percent, max_activations, current_activations, 
+                   created_at, is_active
+            FROM {referral_config.REFERRAL_TABLE_NAME}
+            ORDER BY created_at DESC
+            LIMIT 20
+        """)
+        
+        coupons = cursor.fetchall()
+        
+        if not coupons:
+            await update.message.reply_text("📊 Нет созданных реферальных купонов.")
+            return
+        
+        message = "📊 *Статистика реферальных купонов:*\n\n"
+        
+        for coupon in coupons:
+            code = coupon['code']
+            discount = coupon['discount_percent']
+            max_uses = coupon['max_activations']
+            current_uses = coupon['current_activations']
+            is_active = coupon['is_active']
+            created_at = coupon['created_at']
+            
+            status = "✅ Активен" if is_active and current_uses < max_uses else "❌ Неактивен"
+            
+            esc_code = escape_markdown_v2(code)
+            esc_status = escape_markdown_v2(status)
+            
+            message += (
+                f"📎 Код: `{esc_code}`\n"
+                f"💸 Скидка: {discount}%\n"
+                f"🔢 Использований: {current_uses}/{max_uses}\n"
+                f"📅 Статус: {esc_status}\n"
+                f"➖➖➖➖➖➖➖➖➖\n"
+            )
+        
+        conn.close()
+        
+        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        
+    except Exception as e:
+        logger.error(f"Error in referral_stats_command: {e}", exc_info=True)
+        await update.message.reply_text("❌ Произошла ошибка при получении статистики.")
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
     if isinstance(context.error, Conflict):
@@ -591,6 +1016,9 @@ def main() -> None:
         .build()
     )
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("reset", reset_command))
+    application.add_handler(CommandHandler("create_referral", create_referral_command))
+    application.add_handler(CommandHandler("referral_stats", referral_stats_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, photo_handler))
     application.add_error_handler(error_handler)
