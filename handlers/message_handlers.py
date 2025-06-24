@@ -5,17 +5,19 @@ from telegram.constants import ParseMode
 
 import config
 import constants
-import database
 from utils import escape_markdown_v2
+from db import bookings as db_bookings
+from db import events as db_events
 
 logger = logging.getLogger(__name__)
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photo uploads for payment confirmation."""
     user = update.message.from_user
+    db_events.log_event(user.id, 'payment_proof_uploaded')
     logger.info(f"Photo received from user {user.id} ({user.first_name})")
 
-    booking_record = database.get_pending_booking_by_user(user.id)
+    booking_record = db_bookings.get_pending_booking_by_user(user.id)
 
     if not booking_record:
         logger.warning(f"Photo from user {user.id} received, but no active booking found.")
@@ -23,9 +25,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     booking_id = booking_record['id']
-    chosen_course = booking_record['chosen_course']
+    course_name = booking_record['course_name']
 
-    if not database.update_booking_status(booking_id, 1):
+    if not db_bookings.update_booking_status(booking_id, 1):
         await update.message.reply_text("Произошла ошибка при обновлении статуса заявки.")
         return
 
@@ -33,7 +35,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"🙏 Спасибо, {escape_markdown_v2(user.first_name)}\! Ваше фото для заявки №*{escape_markdown_v2(str(booking_id))}* "
-        f"\(курс '*{escape_markdown_v2(chosen_course)}*' \) получено\.\n"
+        f"\(курс '*{escape_markdown_v2(course_name)}*' \) получено\.\n"
         "Оплата проверяется\. Мы сообщим вам о результате\.",
         parse_mode=ParseMode.MARKDOWN_V2
     )
@@ -46,7 +48,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🧾 *Новый чек для проверки\!*\n"
         f"Пользователь: {escape_markdown_v2(user.first_name)} \(ID: `{user.id}`\)\n"
         f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
-        f"Курс: *{escape_markdown_v2(chosen_course)}*"
+        f"Курс: *{escape_markdown_v2(course_name)}*"
     )
 
     forwarded_message = await context.bot.forward_message(
