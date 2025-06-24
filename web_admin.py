@@ -8,7 +8,10 @@ import sqlite3
 from datetime import datetime, timedelta
 import subprocess
 import sys
+import random
+import string
 import config
+import referral_config
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
@@ -17,6 +20,61 @@ def get_db_connection():
     """Создание подключения к базе данных"""
     conn = sqlite3.connect(config.DB_NAME)
     conn.row_factory = sqlite3.Row
+    
+    # Создаем таблицы реферальной системы если их нет
+    try:
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {referral_config.REFERRAL_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT,
+                discount_percent INTEGER NOT NULL,
+                max_activations INTEGER NOT NULL,
+                current_activations INTEGER DEFAULT 0,
+                created_by INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+        
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {referral_config.REFERRAL_USAGE_TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                coupon_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                booking_id INTEGER,
+                used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (coupon_id) REFERENCES {referral_config.REFERRAL_TABLE_NAME}(id),
+                FOREIGN KEY (booking_id) REFERENCES bookings(id),
+                UNIQUE(coupon_id, user_id)
+            )
+        """)
+        
+        # Проверяем и добавляем колонки в таблицу bookings если их нет
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(bookings)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'referral_code' not in columns:
+            conn.execute("ALTER TABLE bookings ADD COLUMN referral_code TEXT")
+            print("Added referral_code column to bookings table")
+        
+        if 'discount_percent' not in columns:
+            conn.execute("ALTER TABLE bookings ADD COLUMN discount_percent INTEGER DEFAULT 0")
+            print("Added discount_percent column to bookings table")
+        
+        # Проверяем и добавляем колонку name в таблицу referral_coupons
+        cursor.execute(f"PRAGMA table_info({referral_config.REFERRAL_TABLE_NAME})")
+        ref_columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'name' not in ref_columns:
+            conn.execute(f"ALTER TABLE {referral_config.REFERRAL_TABLE_NAME} ADD COLUMN name TEXT")
+            print("Added name column to referral_coupons table")
+        
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error creating referral tables: {e}")
+    
     return conn
 
 @app.route('/')
@@ -190,6 +248,164 @@ def prepare_messaging():
         return render_template('messaging.html', 
                              output="",
                              error=str(e))
+
+@app.route('/referrals')
+def referrals():
+    """Страница управления реферальными купонами"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем все купоны
+    cursor.execute(f"""
+        SELECT id, code, name, discount_percent, max_activations, current_activations, 
+               created_at, is_active, created_by
+        FROM {referral_config.REFERRAL_TABLE_NAME}
+        ORDER BY created_at DESC
+    """)
+    coupons = cursor.fetchall()
+    
+    # Получаем статистику использования
+    cursor.execute(f"""
+        SELECT r.coupon_id, COUNT(*) as usage_count, MAX(r.used_at) as last_used
+        FROM {referral_config.REFERRAL_USAGE_TABLE_NAME} r
+        GROUP BY r.coupon_id
+    """)
+    usage_stats = {row['coupon_id']: row for row in cursor.fetchall()}
+    
+    conn.close()
+    
+    # Подготавливаем данные для отображения
+    coupon_data = []
+    for coupon in coupons:
+        usage = usage_stats.get(coupon['id'], {})
+        # Проверяем, является ли usage словарем или Row объектом
+        if usage and not isinstance(usage, dict):
+            last_used = usage['last_used'] if usage['last_used'] else 'Не использован'
+        else:
+            last_used = usage.get('last_used', 'Не использован') if isinstance(usage, dict) else 'Не использован'
+            
+        coupon_data.append({
+            'id': coupon['id'],
+            'code': coupon['code'],
+            'name': coupon['name'] or '',
+            'discount_percent': coupon['discount_percent'],
+            'max_activations': coupon['max_activations'],
+            'current_activations': coupon['current_activations'],
+            'created_at': coupon['created_at'],
+            'is_active': coupon['is_active'],
+            'last_used': last_used,
+            'remaining': coupon['max_activations'] - coupon['current_activations'],
+            'is_expired': coupon['current_activations'] >= coupon['max_activations']
+        })
+    
+    return render_template('referrals.html', 
+                         coupons=coupon_data,
+                         available_discounts=referral_config.REFERRAL_DISCOUNTS)
+
+@app.route('/create-referral', methods=['POST'])
+def create_referral():
+    """Создание нового реферального купона"""
+    try:
+        discount_percent = int(request.form.get('discount_percent'))
+        max_activations = int(request.form.get('max_activations'))
+        name = request.form.get('name', '').strip()
+        
+        if discount_percent not in referral_config.REFERRAL_DISCOUNTS:
+            return jsonify({'success': False, 'error': 'Недопустимый процент скидки'})
+        
+        if max_activations <= 0:
+            return jsonify({'success': False, 'error': 'Количество активаций должно быть больше 0'})
+        
+        # Генерируем уникальный код
+        code = ''.join(random.choices(referral_config.REFERRAL_CODE_CHARS, k=referral_config.REFERRAL_CODE_LENGTH))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"""
+            INSERT INTO {referral_config.REFERRAL_TABLE_NAME} 
+            (code, name, discount_percent, max_activations, created_by) 
+            VALUES (?, ?, ?, ?, ?)
+        """, (code, name, discount_percent, max_activations, 0))  # 0 - ID админа из веб-панели
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'code': code,
+            'name': name,
+            'link': f"https://t.me/hashslash_bot?start={referral_config.REFERRAL_START_PARAMETER}{code}"
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/toggle-referral/<int:coupon_id>', methods=['POST'])
+def toggle_referral(coupon_id):
+    """Активация/деактивация купона"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"""
+            UPDATE {referral_config.REFERRAL_TABLE_NAME}
+            SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END
+            WHERE id = ?
+        """, (coupon_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/update-referral-name/<int:coupon_id>', methods=['POST'])
+def update_referral_name(coupon_id):
+    """Обновление имени купона"""
+    try:
+        name = request.form.get('name', '').strip()
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"""
+            UPDATE {referral_config.REFERRAL_TABLE_NAME}
+            SET name = ?
+            WHERE id = ?
+        """, (name, coupon_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/update-referral-discount/<int:coupon_id>', methods=['POST'])
+def update_referral_discount(coupon_id):
+    """Обновление размера скидки купона"""
+    try:
+        discount_percent = int(request.form.get('discount_percent'))
+        
+        if discount_percent < 0 or discount_percent > 100:
+            return jsonify({'success': False, 'error': 'Скидка должна быть от 0 до 100%'})
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"""
+            UPDATE {referral_config.REFERRAL_TABLE_NAME}
+            SET discount_percent = ?
+            WHERE id = ?
+        """, (discount_percent, coupon_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     # Создаем папку для шаблонов если её нет

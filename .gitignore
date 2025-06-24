@@ -2,6 +2,7 @@ config.py
 *.db
 *.sqlite
 *.sqlite3
+.env
 bot_context_persistence
 __pycache__/
 *.pyc
@@ -16,3 +17,4 @@ ENV/
 *.swp
 *.swo
 course_selection.log
+repomix-output.xml
