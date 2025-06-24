@@ -5,42 +5,13 @@ from telegram.constants import ParseMode
 
 import config
 import constants
-import database
 from utils import escape_markdown_v2
+from db import courses as db_courses
+from db import bookings as db_bookings
+from db import events as db_events
+from db import referrals as db_referrals
 
 logger = logging.getLogger(__name__)
-
-def get_course_details_text_and_markup(user_first_name, course, referral_info):
-    """Helper function to generate the text and keyboard for the course details view."""
-    price_info = ""
-    if referral_info:
-        discount = referral_info['discount_percent']
-        discounted_price = course['price_usd'] * (1 - discount / 100)
-        price_info = (f"\n💰 Стоимость: <s>${course['price_usd']}</s> "
-                      f"<b>${discounted_price:.0f}</b> (скидка {discount}%)\n")
-    else:
-        price_info = f"\n💰 Стоимость: <b>${course['price_usd']}</b>\n"
-
-    # Simple formatting for the description
-    formatted_description = course['description'].replace(
-        'На этом курсе', '<b>На этом курсе</b>', 1
-    ).replace(
-        'После обучения', '<b>После обучения</b>', 1
-    )
-
-    text = (
-        f"<b>Курс:</b> {course['name']}\n"
-        f"<b>Имя:</b> {user_first_name}\n"
-        f"<b>Дата старта:</b> 30 мая\n"
-        f"{price_info}\n"
-        f"{formatted_description}"
-    )
-    keyboard = [
-        [InlineKeyboardButton("✅ Забронировать место", callback_data=constants.CALLBACK_CONFIRM_COURSE_SELECTION)],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_start")]
-    ]
-    return text, InlineKeyboardMarkup(keyboard)
-
 
 async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """The main router for all callback queries."""
@@ -50,15 +21,12 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     user = query.from_user
     data = query.data
 
-    # Store user info in context for easy access
     context.user_data['user_id'] = user.id
     context.user_data['username'] = user.username or ""
     context.user_data['first_name'] = user.first_name or "Пользователь"
 
-    if data == constants.CALLBACK_RESERVE_SPOT:
-        await handle_reserve_spot(query, context)
-    elif data == "back_to_start":
-        await handle_back_to_start(query, context)
+    if data.startswith(constants.CALLBACK_SELECT_COURSE_PREFIX):
+        await handle_select_course(query, context)
     elif data == constants.CALLBACK_CONFIRM_COURSE_SELECTION:
         await handle_confirm_selection(query, context)
     elif data.startswith(constants.CALLBACK_CANCEL_RESERVATION):
@@ -68,25 +36,41 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     else:
         logger.warning(f"Unhandled callback data: {data} from user {user.id}")
 
-async def handle_reserve_spot(query, context):
-    """Shows details for the one and only course."""
-    course = constants.COURSES[0]
-    context.user_data['pending_course_id'] = course['id']
-    text, markup = get_course_details_text_and_markup(
-        context.user_data['first_name'],
-        course,
-        context.user_data.get('pending_referral_info')
-    )
-    await query.edit_message_text(text, reply_markup=markup, parse_mode='HTML', disable_web_page_preview=True)
+async def handle_select_course(query, context):
+    """Shows details for a dynamically selected course."""
+    try:
+        course_id = int(query.data.replace(constants.CALLBACK_SELECT_COURSE_PREFIX, ''))
+    except (ValueError, IndexError):
+        logger.error(f"Invalid course callback data: {query.data}")
+        return
 
-async def handle_back_to_start(query, context):
-    """Returns the user to the initial start message."""
-    keyboard = [[InlineKeyboardButton("Посмотреть программу", callback_data=constants.CALLBACK_RESERVE_SPOT)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        "Привет! Добро пожаловать в школу HashSlash! 👋\n\n...", # Abridged for brevity
-        reply_markup=reply_markup
+    course = db_courses.get_course_by_id(course_id)
+    if not course:
+        await query.edit_message_text("Извините, этот курс больше не доступен.")
+        return
+
+    context.user_data['pending_course_id'] = course_id
+    db_events.log_event(query.from_user.id, 'view_program', details={'course_id': course_id})
+
+    price_usd = course['price_usd_cents'] / 100
+    referral_info = context.user_data.get('pending_referral_info')
+    
+    price_info_str = f"<b>${price_usd:.0f}</b>"
+    if referral_info:
+        discount = referral_info['discount_percent']
+        discounted_price = price_usd * (1 - discount / 100)
+        price_info_str = f"<s>${price_usd:.0f}</s> <b>${discounted_price:.0f}</b> (скидка {discount}%)"
+
+    text = (
+        f"<b>Курс:</b> {course['name']}\n"
+        f"<b>Имя:</b> {context.user_data['first_name']}\n"
+        f"<b>Старт:</b> {course['start_date_text']}\n"
+        f"<b>Стоимость:</b> {price_info_str}\n\n"
+        f"{course['description']}"
     )
+    
+    keyboard = [[InlineKeyboardButton("✅ Забронировать место", callback_data=constants.CALLBACK_CONFIRM_COURSE_SELECTION)]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML', disable_web_page_preview=True)
 
 async def handle_confirm_selection(query, context):
     """Confirms course selection and creates a preliminary booking."""
@@ -94,37 +78,37 @@ async def handle_confirm_selection(query, context):
     course_id = context.user_data.get('pending_course_id')
 
     if not course_id:
-        await query.edit_message_text("Произошла ошибка. Пожалуйста, выберите курс заново.")
+        await query.edit_message_text("Произошла ошибка, сессия истекла. Пожалуйста, начните заново с /start.")
         return
 
-    course = next((c for c in constants.COURSES if c["id"] == course_id), None)
-    
+    course = db_courses.get_course_by_id(course_id)
     referral_code = context.user_data.get('pending_referral_code')
     referral_info = context.user_data.get('pending_referral_info')
     discount_percent = referral_info['discount_percent'] if referral_info else 0
 
-    booking_id = database.create_booking(
+    booking_id = db_bookings.create_booking(
         user_id,
         context.user_data['username'],
         context.user_data['first_name'],
-        course['name'],
-        course['id'],
+        course_id,
         referral_code,
         discount_percent
     )
 
     if not booking_id:
-        await query.edit_message_text("Не удалось создать бронирование. Попробуйте снова.")
+        await query.edit_message_text("Не удалось создать бронирование. Пожалуйста, попробуйте снова.")
         return
 
-    logger.info(f"Booking {booking_id} created for user {user_id}")
-    
+    db_events.log_event(user_id, 'booking_created', details={'course_id': course_id, 'booking_id': booking_id})
     if referral_info:
-        database.apply_referral_discount(referral_info['id'], user_id, booking_id)
+        db_referrals.apply_referral_discount(referral_info['id'], user_id, booking_id)
 
-    discounted_price_usd = course['price_usd'] * (1 - discount_percent / 100)
+    price_usd = course['price_usd_cents'] / 100
+    discounted_price_usd = price_usd * (1 - discount_percent / 100)
+    
     price_rub = round(discounted_price_usd * config.USD_TO_RUB_RATE, 2)
     price_kzt = round(discounted_price_usd * config.USD_TO_KZT_RATE, 2)
+    price_ars = round(discounted_price_usd * config.USD_TO_ARS_RATE, 2)
 
     esc_course_name = escape_markdown_v2(course['name'])
     esc_booking_id = escape_markdown_v2(str(booking_id))
@@ -135,7 +119,9 @@ async def handle_confirm_selection(query, context):
         f"⏳ _{esc_notice}_\n\n"
         f"💳 *Реквизиты для оплаты:*\n"
         f"🇷🇺 Т\-Банк \(RUB\): `{escape_markdown_v2(f'{price_rub:.2f} RUB')}`\n"
-        f"🇰🇿 Kaspi \(KZT\): `{escape_markdown_v2(f'{price_kzt:.2f} KZT')}`\n\n"
+        f"🇰🇿 Kaspi \(KZT\): `{escape_markdown_v2(f'{price_kzt:.2f} KZT')}`\n"
+        f"🇦🇷 Аргентинское Песо \(ARS\): `{escape_markdown_v2(f'{price_ars:.2f} ARS')}`\n"
+        f"💸 USDT TRC\-20: `{escape_markdown_v2(f'{discounted_price_usd:.2f} USDT')}`\n\n"
         f"🧾 После оплаты отправьте фото чека в этот чат\."
     )
 
@@ -151,8 +137,7 @@ async def handle_cancel_reservation(query, context):
         logger.error(f"Invalid cancel callback data: {query.data}")
         return
 
-    # To avoid complex logic, we'll just send them back to the start.
-    if database.update_booking_status(booking_id, -1):
+    if db_bookings.update_booking_status(booking_id, -1):
         logger.info(f"User {user_id} cancelled booking {booking_id}")
         await query.edit_message_text("Ваше бронирование отменено. Вы можете начать заново, нажав /start.")
     else:
@@ -168,12 +153,16 @@ async def handle_admin_approve(query, context):
         logger.error(f"Invalid admin approve callback: {query.data}")
         return
 
-    if database.update_booking_status(booking_id, 2):
+    if db_bookings.update_booking_status(booking_id, 2):
         logger.info(f"Admin {query.from_user.id} approved payment for booking {booking_id}")
         await query.edit_message_text(f"✅ Оплата для заявки №{booking_id} (Пользователь {target_user_id}) ПОДТВЕРЖДЕНА.")
         
-        booking_details = database.get_booking_details(booking_id)
-        is_consultation = booking_details and booking_details['course_id'] in ["3", "4"]
+        booking_details = db_bookings.get_booking_details(booking_id)
+        is_consultation = False # Placeholder, add logic if consultation courses exist
+        if booking_details:
+            # Example: check if course ID corresponds to a consultation
+            # is_consultation = booking_details['course_id'] in [3, 4]
+            pass
 
         confirmation_text = f"🎉 Поздравляем! Ваша оплата по заявке №{booking_id} подтверждена. Место забронировано!"
         if is_consultation:
