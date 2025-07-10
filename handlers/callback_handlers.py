@@ -35,6 +35,14 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_admin_approve(query, context)
     else:
         logger.warning(f"Unhandled callback data: {data} from user {user.id}")
+        # Логируем неизвестные callback'и
+        db_events.log_event(
+            user.id, 
+            'unknown_callback', 
+            details={'callback_data': data},
+            username=context.user_data['username'],
+            first_name=context.user_data['first_name']
+        )
 
 async def handle_select_course(query, context):
     """Shows details for a dynamically selected course."""
@@ -50,7 +58,13 @@ async def handle_select_course(query, context):
         return
 
     context.user_data['pending_course_id'] = course_id
-    db_events.log_event(query.from_user.id, 'view_program', details={'course_id': course_id})
+    db_events.log_event(
+        query.from_user.id, 
+        'view_program', 
+        details={'course_id': course_id},
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
 
     price_usd = course['price_usd_cents'] / 100
     referral_info = context.user_data.get('pending_referral_info')
@@ -99,7 +113,13 @@ async def handle_confirm_selection(query, context):
         await query.edit_message_text("Не удалось создать бронирование. Пожалуйста, попробуйте снова.")
         return
 
-    db_events.log_event(user_id, 'booking_created', details={'course_id': course_id, 'booking_id': booking_id})
+    db_events.log_event(
+        user_id, 
+        'booking_created', 
+        details={'course_id': course_id, 'booking_id': booking_id},
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
     if referral_info:
         db_referrals.apply_referral_discount(referral_info['id'], user_id, booking_id)
 
@@ -139,6 +159,14 @@ async def handle_cancel_reservation(query, context):
 
     if db_bookings.update_booking_status(booking_id, -1):
         logger.info(f"User {user_id} cancelled booking {booking_id}")
+        # Логируем отмену бронирования
+        db_events.log_event(
+            user_id, 
+            'booking_cancelled', 
+            details={'booking_id': booking_id},
+            username=context.user_data['username'],
+            first_name=context.user_data['first_name']
+        )
         await query.edit_message_text("Ваше бронирование отменено. Вы можете начать заново, нажав /start.")
     else:
         await query.edit_message_text("Не удалось отменить бронирование. Возможно, оно уже обработано.")
@@ -155,6 +183,14 @@ async def handle_admin_approve(query, context):
 
     if db_bookings.update_booking_status(booking_id, 2):
         logger.info(f"Admin {query.from_user.id} approved payment for booking {booking_id}")
+        # Логируем подтверждение админом
+        db_events.log_event(
+            target_user_id, 
+            'payment_approved', 
+            details={'booking_id': booking_id, 'approved_by': query.from_user.id},
+            username=None,  # username цели получим из bookings
+            first_name=None
+        )
         await query.edit_message_text(f"✅ Оплата для заявки №{booking_id} (Пользователь {target_user_id}) ПОДТВЕРЖДЕНА.")
         
         booking_details = db_bookings.get_booking_details(booking_id)

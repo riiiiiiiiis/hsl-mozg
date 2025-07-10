@@ -6,11 +6,21 @@ from db.base import get_db_connection
 
 logger = logging.getLogger(__name__)
 
-def log_event(user_id, event_type, details=None):
+def log_event(user_id, event_type, details=None, username=None, first_name=None):
     """Logs a user event to the events table for statistics."""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
+            # Создаем details словарь если его нет
+            if details is None:
+                details = {}
+            
+            # Добавляем username и first_name если они переданы
+            if username:
+                details['username'] = username
+            if first_name:
+                details['first_name'] = first_name
+            
             details_json = json.dumps(details) if details else None
             cursor.execute(
                 "INSERT INTO events (user_id, event_type, details) VALUES (%s, %s, %s)",

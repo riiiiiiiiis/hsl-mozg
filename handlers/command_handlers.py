@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles the /start command, dynamically loading courses."""
     user = update.message.from_user
-    db_events.log_event(user.id, 'start_command')
+    db_events.log_event(
+        user.id, 
+        'start_command',
+        username=user.username,
+        first_name=user.first_name
+    )
     logger.info(f"START command from user {user.id} ({user.first_name})")
 
     if context.args and len(context.args) > 0:
@@ -27,6 +32,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if status == "valid":
                 context.user_data['pending_referral_code'] = referral_code
                 context.user_data['pending_referral_info'] = dict(coupon)
+                
+                # Логируем использование реферального кода
+                db_events.log_event(
+                    user.id, 
+                    'referral_code_used',
+                    details={'referral_code': referral_code, 'discount': coupon['discount_percent']},
+                    username=user.username,
+                    first_name=user.first_name
+                )
                 
                 remaining = coupon['max_activations'] - coupon['current_activations']
                 discount_msg = constants.REFERRAL_APPLIED_MESSAGE.format(discount=coupon['discount_percent'])
@@ -56,8 +70,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clears all user data for the current chat session."""
+    user = update.message.from_user
+    # Логируем сброс сессии
+    db_events.log_event(
+        user.id, 
+        'session_reset',
+        username=user.username,
+        first_name=user.first_name
+    )
     context.user_data.clear()
-    logger.info(f"User {update.message.from_user.id} reset their session.")
+    logger.info(f"User {user.id} reset their session.")
     await update.message.reply_text(
         "🔄 Ваша сессия сброшена. Вы можете начать заново, используя /start."
     )
@@ -85,6 +107,14 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
         bot_username = context.bot.username
         link = f"https://t.me/{bot_username}?start={constants.REFERRAL_START_PARAMETER}{code}"
 
+        # Логируем создание реферального кода
+        db_events.log_event(
+            user.id, 
+            'referral_created',
+            details={'code': code, 'discount': discount, 'activations': activations},
+            username=user.username,
+            first_name=user.first_name
+        )
         logger.info(f"Admin {user.id} created a new referral code: {code}")
         await update.message.reply_text(
             f"✅ Купон создан\!\nКод: `{escape_markdown_v2(code)}`\n"
@@ -101,6 +131,13 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
 async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to view referral coupon statistics."""
     user = update.message.from_user
+    # Логируем запрос статистики
+    db_events.log_event(
+        user.id, 
+        'referral_stats_requested',
+        username=user.username,
+        first_name=user.first_name
+    )
     if constants.REFERRAL_ADMIN_IDS and user.id not in constants.REFERRAL_ADMIN_IDS:
         await update.message.reply_text("❌ У вас нет прав для просмотра статистики.")
         return
@@ -123,6 +160,14 @@ async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to get a quick statistics summary."""
+    user = update.message.from_user
+    # Логируем запрос статистики
+    db_events.log_event(
+        user.id, 
+        'stats_requested',
+        username=user.username,
+        first_name=user.first_name
+    )
     try:
         stats = db_events.get_stats_summary()
         message = (

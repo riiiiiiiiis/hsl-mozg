@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photo uploads for payment confirmation."""
     user = update.message.from_user
-    db_events.log_event(user.id, 'payment_proof_uploaded')
+    db_events.log_event(
+        user.id, 
+        'payment_proof_uploaded',
+        username=user.username,
+        first_name=user.first_name
+    )
     logger.info(f"Photo received from user {user.id} ({user.first_name})")
 
     booking_record = db_bookings.get_pending_booking_by_user(user.id)
