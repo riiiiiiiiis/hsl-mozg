@@ -134,14 +134,26 @@ async def handle_confirm_selection(query, context):
     esc_booking_id = escape_markdown_v2(str(booking_id))
     esc_notice = escape_markdown_v2(constants.BOOKING_DURATION_NOTICE)
     
+    # Экранируем реквизиты для безопасного отображения
+    esc_tbank_card = escape_markdown_v2(config.TBANK_CARD_NUMBER)
+    esc_tbank_holder = escape_markdown_v2(config.TBANK_CARD_HOLDER)
+    esc_kaspi_card = escape_markdown_v2(config.KASPI_CARD_NUMBER)
+    esc_ars_alias = escape_markdown_v2(config.ARS_ALIAS)
+    esc_usdt_address = escape_markdown_v2(config.USDT_TRC20_ADDRESS)
+    
     message_text = (
         f"📝 Ваше место на курс '*{esc_course_name}*' предварительно забронировано \(Заявка №*{esc_booking_id}*\)\.\n\n"
         f"⏳ _{esc_notice}_\n\n"
-        f"💳 *Реквизиты для оплаты:*\n"
-        f"🇷🇺 Т\-Банк \(RUB\): `{escape_markdown_v2(f'{price_rub:.2f} RUB')}`\n"
-        f"🇰🇿 Kaspi \(KZT\): `{escape_markdown_v2(f'{price_kzt:.2f} KZT')}`\n"
-        f"🇦🇷 Аргентинское Песо \(ARS\): `{escape_markdown_v2(f'{price_ars:.2f} ARS')}`\n"
-        f"💸 USDT TRC\-20: `{escape_markdown_v2(f'{discounted_price_usd:.2f} USDT')}`\n\n"
+        f"💳 *Реквизиты для оплаты:*\n\n"
+        f"🇷🇺 *Т\-Банк \({escape_markdown_v2(f'{price_rub:.2f} RUB')}\):*\n"
+        f"  Карта: `{esc_tbank_card}`\n"
+        f"  Получатель: {esc_tbank_holder}\n\n"
+        f"🇰🇿 *Kaspi \({escape_markdown_v2(f'{price_kzt:.2f} KZT')}\):*\n"
+        f"  Карта: `{esc_kaspi_card}`\n\n"
+        f"🇦🇷 *Аргентина \({escape_markdown_v2(f'{price_ars:.2f} ARS')}\):*\n"
+        f"  Alias: `{esc_ars_alias}`\n\n"
+        f"💸 *USDT TRC\-20 \({escape_markdown_v2(f'{discounted_price_usd:.2f} USDT')}\):*\n"
+        f"  Адрес: `{esc_usdt_address}`\n\n"
         f"🧾 После оплаты отправьте фото чека в этот чат\."
     )
 
