@@ -86,7 +86,12 @@ def get_booking_details(booking_id):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
-            cursor.execute("SELECT course_id FROM bookings WHERE id = %s", (booking_id,))
+            cursor.execute("""
+                SELECT b.course_id, b.user_id, b.username, b.first_name, b.confirmed, c.name as course_name
+                FROM bookings b
+                JOIN courses c ON b.course_id = c.id
+                WHERE b.id = %s
+            """, (booking_id,))
             return cursor.fetchone()
     finally:
         conn.close()

@@ -4,84 +4,99 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Telegram bot for "HashSlash School" that handles course bookings and payment processing. The bot offers programming courses and consultations with integrated payment verification and admin moderation.
+This is a Telegram bot for "HashSlash School" that handles course bookings and payment processing. The bot offers AI-powered programming courses with integrated payment verification, referral system, and admin moderation.
 
 ## Commands
 
 - **Run the bot**: `python bot.py` or `./run.sh`
 - **Install dependencies**: `pip install -r requirements.txt`
-- **Setup configuration**: Copy `config.py.example` to `config.py` and fill in required values
-- **Run web admin**: `python web_admin.py` or `./start_web_admin.sh`
-- **Run desktop admin**: `python admin_panel.py` or double-click `start_admin_panel.command`
+- **Setup configuration**: Copy `config.py.example` to `config.py` and set environment variables
+- **Setup database**: `docker-compose up -d` for local PostgreSQL
+- **Populate courses**: `python db_management/populate_initial_course.py`
 - **Run tests**: No test framework currently configured
 
 ## Architecture
 
 ### Core Components
 
-1. **bot.py** - Main application with async handlers using python-telegram-bot v20+
-   - ConversationHandler for managing multi-step booking flow
-   - PicklePersistence for state management across restarts (conversation_state.pickle)
-   - Inline keyboards for interactive navigation
-   - States: CHOOSING_COURSE → CONFIRMING_COURSE → AWAITING_PAYMENT → PAYMENT_UPLOADED
+1. **bot.py** - Main entry point
+   - Sets up bot application with handlers
+   - Initializes database on startup
+   - Auto-updates courses on deployment
+   - Uses polling mode (not webhooks)
 
-2. **Database** - SQLite with automatic schema migration
-   - Extended bookings table: `id, user_id, username, first_name, chosen_course, course_id, confirmed, created_at`
-   - Unique constraints on (user_id, chosen_course, created_at)
-   - Status codes: 0=pending, 1=payment_uploaded, 2=approved, -1=cancelled
-   - Note: bookings.sql is outdated - bot.py contains actual schema
+2. **Database** - PostgreSQL with modular structure
+   - **db/base.py**: Database connection and schema setup
+   - **db/bookings.py**: Booking management with referral support
+   - **db/courses.py**: Course catalog operations
+   - **db/events.py**: Event logging and analytics
+   - **db/referrals.py**: Referral coupon system
+   - Tables: courses, bookings, referral_coupons, referral_usage, events
 
-3. **Payment Flow**
+3. **Handlers** - Modular command and callback handling
+   - **handlers/command_handlers.py**: `/start`, `/reset`, `/stats`, `/create_referral`, `/referral_stats`
+   - **handlers/callback_handlers.py**: Inline keyboard interactions
+   - **handlers/message_handlers.py**: Photo upload for payment receipts
+
+4. **Payment Flow**
    - Multi-currency support with automatic exchange rate calculations
    - Photo upload for payment receipts
    - Admin notification system with approve/reject inline buttons
-   - Different confirmation flows for courses vs consultations
-   - 1-hour preliminary reservation system
+   - Referral discount system (10-100% off)
+   - Event tracking for analytics
 
-4. **Admin Tools**
-   - **web_admin.py**: Flask-based web interface (port 5000)
-     - Dashboard with statistics
-     - User management (confirmed/unconfirmed lists)
-     - Bulk messaging to confirmed users
-   - **admin_panel.py**: Tkinter desktop GUI
-     - View confirmed/unconfirmed users
-     - Statistics display
-   - **Utility scripts**: Individual task-specific scripts
+5. **Admin Tools**
+   - Currently no admin interface in codebase
+   - Admin functions via Telegram commands only
+   - Stats available through `/stats` command
 
 ### Course Structure
 
-- Courses defined in bot.py: 
-  - "Вайб Кодинг" ($70)
-  - "Консультация по Blockchain" ($25)
-  - "Консультация ChatGPT" ($25)
-- Consultations receive calendar link after approval
-- Courses receive general confirmation
+- Courses stored in database (not hardcoded):
+  - "Вайб Кодинг CORE" ($100, ID: 1)
+  - "Вайб Кодинг EXTRA" ($200, ID: 2)
+- Both courses start July 23rd
+- Focus: AI-assisted coding without prior experience
 
 ### Key Technical Decisions
 
 - Uses async/await patterns throughout for efficient handling
-- Implements MarkdownV2 escaping for safe message formatting
-- Separate logging for course selections (course_selections.log)
-- Webhook deletion on startup to prevent conflicts
+- PostgreSQL database with connection pooling
+- Modular architecture with separate handler and database modules
+- Event-driven analytics system for tracking user actions
+- Referral system with flexible discount coupons
 - Comprehensive error handling with detailed logging
 - Admin notifications use HTML parse mode for better formatting
+- No webhook usage - polling mode only
 
 ### Configuration Structure
 
-The `config.py` file contains:
-- BOT_TOKEN - Telegram bot API token
-- ADMIN_CONTACT - Admin contact for support  
-- TARGET_CHAT_ID - Chat ID for admin notifications
-- Payment details for multiple currencies (RUB, KZT, ARS, USDT)
-- Exchange rates for currency conversions
+Environment variables (set in `.env` file or system):
+- `DATABASE_URL` - PostgreSQL connection string
+- `BOT_TOKEN` - Telegram bot API token
+- `TARGET_CHAT_ID` - Chat ID for admin notifications
+- `ADMIN_CONTACT` - Admin contact for support
+- Payment details for multiple currencies:
+  - `RUB_*` - Russian Ruble payment details
+  - `KZT_*` - Kazakhstani Tenge payment details
+  - `ARS_*` - Argentine Peso payment details
+  - `USDT_*` - USDT (Tether) payment details
+- Exchange rates: `KZT_TO_USD`, `RUB_TO_USD`, `ARS_TO_USD`
 
 ### Important Patterns
 
 When modifying the bot:
 - All handlers should be async functions
 - Use escape_markdown_v2() for any user-provided text
-- Check booking status before allowing state transitions
-- Log all critical actions and errors
-- Maintain the conversation flow states
-- Use transaction management for database operations
+- Database operations use connection pooling - don't manually manage connections
+- Event logging for analytics: log_event(user_id, action, details)
+- Referral validation happens during course selection
 - Always handle photo uploads as list (update.message.photo[-1])
+- Use constants.py for static values and course definitions
+
+### Deployment
+
+- **Heroku**: Uses Procfile with web dyno type
+- **Local**: docker-compose.yml for PostgreSQL setup
+- Auto-updates course data on bot startup
+- No CI/CD pipeline configured
