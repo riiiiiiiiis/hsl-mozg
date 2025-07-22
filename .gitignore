@@ -17,3 +17,44 @@ ENV/
 *.swo
 course_selection.log
 repomix-output.xml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*~
+*.tmp
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Local configuration
+config.py
+*.local
+
+# Temporary files
+*.temp
+*.cache
+
+# Integration test files (if they contain sensitive data)
+test_integration_manual.py
+
+# Example files (usually not needed in repo)
+*_examples.py

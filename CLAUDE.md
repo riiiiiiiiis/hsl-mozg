@@ -28,10 +28,11 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 2. **Database** - PostgreSQL with modular structure
    - **db/base.py**: Database connection and schema setup
    - **db/bookings.py**: Booking management with referral support
-   - **db/courses.py**: Course catalog operations
+   - **db/courses.py**: Course catalog operations (now reads from constants.py instead of database)
+   - **db/course_validation.py**: Validates course data structure and ensures data integrity
    - **db/events.py**: Event logging and analytics
    - **db/referrals.py**: Referral coupon system
-   - Tables: courses, bookings, referral_coupons, referral_usage, events
+   - Tables: bookings, referral_coupons, referral_usage, events (courses table no longer used)
 
 3. **Handlers** - Modular command and callback handling
    - **handlers/command_handlers.py**: `/start`, `/reset`, `/stats`, `/create_referral`, `/referral_stats`
@@ -52,11 +53,16 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 
 ### Course Structure
 
-- Courses stored in database (not hardcoded):
+- Courses stored in constants.py (hardcoded for easier content management):
   - "Вайб Кодинг CORE" ($100, ID: 1)
   - "Вайб Кодинг EXTRA" ($200, ID: 2)
 - Both courses start July 23rd
 - Focus: AI-assisted coding without prior experience
+- Course data structure includes:
+  - Required fields: id, name, button_text, description, price_usd
+  - Optional fields: price_usd_cents, is_active, start_date_text
+  - Automatic validation on first access via db/course_validation.py
+  - Validation includes type checking, required field presence, and data consistency
 
 ### Key Technical Decisions
 
@@ -93,6 +99,11 @@ When modifying the bot:
 - Referral validation happens during course selection
 - Always handle photo uploads as list (update.message.photo[-1])
 - Use constants.py for static values and course definitions
+- Course data changes:
+  - Edit course information directly in constants.py COURSES list
+  - Ensure all required fields are present (validation will catch errors)
+  - Run tests after changes: `python3 test_courses.py`
+  - Course data is validated on first access and cached for performance
 
 ### Deployment
 
