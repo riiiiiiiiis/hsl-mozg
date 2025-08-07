@@ -52,8 +52,15 @@ def main() -> None:
 
     # 5. Регистрируем обработчик фото (для чеков)
     application.add_handler(MessageHandler(filters.PHOTO, message_handlers.photo_handler))
+    
+    # 6. Регистрируем обработчик для всех остальных сообщений (текст, видео, документы и т.д.)
+    # Этот handler должен быть последним, чтобы не перехватывать команды
+    application.add_handler(MessageHandler(
+        filters.ALL & ~filters.COMMAND & ~filters.PHOTO, 
+        message_handlers.any_message_handler
+    ))
 
-    # 6. Запускаем бота
+    # 7. Запускаем бота
     logger.info("Starting bot polling...")
     application.run_polling()
 

@@ -25,10 +25,26 @@ def get_pending_booking_by_user(user_id):
     try:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute("""
-                SELECT b.id, c.name as course_name
+                SELECT b.id, c.name as course_name, b.confirmed as status
                 FROM bookings b
                 JOIN courses c ON b.course_id = c.id
                 WHERE b.user_id = %s AND b.confirmed = 0
+                ORDER BY b.created_at DESC LIMIT 1
+            """, (user_id,))
+            return cursor.fetchone()
+    finally:
+        conn.close()
+
+def get_active_booking_by_user(user_id):
+    """Retrieves the most recent active booking (pending or approved) for a user."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            cursor.execute("""
+                SELECT b.id, c.name as course_name, b.confirmed as status
+                FROM bookings b
+                JOIN courses c ON b.course_id = c.id
+                WHERE b.user_id = %s AND b.confirmed IN (0, 1, 2)
                 ORDER BY b.created_at DESC LIMIT 1
             """, (user_id,))
             return cursor.fetchone()
