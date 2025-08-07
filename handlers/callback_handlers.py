@@ -217,11 +217,11 @@ async def handle_admin_approve(query, context):
         
         confirmation_text = f"""Привет, {user_first_name}!
 
-Ты в Потоке #2 (23 июля - 6 августа).
+Ты в Потоке BOCTOK (12 августа, 19 августа, 26 августа).
 
 Что дальше:
-1. 22 июля скину доступ к материалам для подготовки и ссылкой на вступление в закрытыю группу. 
-2. 23 июля в 21:00 по мск - первый лайв
+1. 11 августа скину доступ к материалам для подготовки и ссылкой на вступление в закрытыю группу. 
+2. 12 августа в 21:00 по мск - первый лайв
 3. Добавлю в закрытый чат курса за пару дней до старта
 
 Если есть вопросы - пиши https://t.me/r1iiis
@@ -232,6 +232,12 @@ async def handle_admin_approve(query, context):
         if is_consultation:
             confirmation_text += f"\n\nПожалуйста, выберите время для консультации: {constants.CALENDAR_LINK}"
         
-        await context.bot.send_message(chat_id=target_user_id, text=confirmation_text)
+        # Отправляем фото с текстом
+        photo_file_id = "AgACAgIAAxkBAAE5FuNolBevwD24uQRSmq28gsyV6FWTnQACdvsxG81-oUhX08cmOnTLeQEAAwIAA3kAAzYE"
+        await context.bot.send_photo(
+            chat_id=target_user_id, 
+            photo=photo_file_id,
+            caption=confirmation_text
+        )
     else:
         await query.edit_message_text(f"⚠️ Не удалось подтвердить заявку №{booking_id}. Возможно, она уже обработана.")
