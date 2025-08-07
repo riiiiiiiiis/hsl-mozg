@@ -88,8 +88,15 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     booking_id = booking_record['id']
-    course_name = booking_record['course_name']
+    course_id = booking_record['course_id']
     booking_status = booking_record['status']
+    
+    # Get course name from constants
+    course_name = "Неизвестный курс"
+    for course in constants.COURSES:
+        if course['id'] == course_id:
+            course_name = course['name']
+            break
     
     # Log the event with appropriate type based on booking status
     event_type = 'student_response' if booking_status == 2 else 'alternative_payment_proof'
