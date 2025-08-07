@@ -132,7 +132,7 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif booking_status == 2:
         # User is already approved, just acknowledge their response
         await update.message.reply_text(
-            f"👍 Спасибо за ответ! Ваше сообщение получено.",
+            f"👍 Спасибо за ответ\\! Ваше сообщение получено\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
     
