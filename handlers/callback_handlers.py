@@ -225,9 +225,8 @@ async def handle_admin_approve(query, context):
 Ты в Потоке BOCTOK (13, 20, 27 августа и 3 сентября).
 
 Что дальше:
-1. 12 августа скину доступ к материалам для подготовки
-2. 13 августа в 21:00 по мск - первый лайв: https://calendar.app.google/AcavEBkN1ZTMsQ1q6
-3. Вступай в группу потока: https://t.me/+oxpLHOBteD41ZThi
+1. 13 августа в 21:00 по мск - первый лайв: https://calendar.app.google/AcavEBkN1ZTMsQ1q6
+2. Вступай в группу потока: https://t.me/+oxpLHOBteD41ZThi
 
 Если есть вопросы - пиши https://t.me/r1iiis
 """
