@@ -55,7 +55,7 @@ FREE_LESSON = {
                    "⏰ Длительность: 60 минут\n"
                    "👥 Формат: онлайн в Google Meet",
     "date_text": "13 августа в 21:00 по МСК",
-    "google_meet_link": "https://meet.google.com/abc-defg-hij",
+    "google_meet_link": "https://calendar.app.google/RpsZQ415YzLPuQvJ7",
     "is_active": True
 }
 
