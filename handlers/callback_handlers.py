@@ -228,7 +228,7 @@ async def handle_admin_approve(query, context):
 1. 13 августа в 21:00 по мск - первый лайв: https://calendar.app.google/AcavEBkN1ZTMsQ1q6
 2. Вступай в группу потока: https://t.me/+oxpLHOBteD41ZThi
 
-Если есть вопросы - пиши https://t.me/r1iiis
+По любым вопросам пиши @serejaris
 """
         
         if is_consultation:
