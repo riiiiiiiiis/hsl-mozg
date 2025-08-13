@@ -21,25 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def send_immediate_reminders(application: Application):
-    """Отправляет напоминания сразу после запуска бота (для экстренных случаев)."""
-    try:
-        logger.info("Sending immediate lesson reminders...")
-        await send_lesson_reminders(application, force_send=True)
-        logger.info("Immediate reminders sent successfully")
-    except Exception as e:
-        logger.error(f"Error sending immediate reminders: {e}")
 
-async def notification_scheduler(application: Application):
-    """Периодически проверяет и отправляет уведомления о бесплатном уроке."""
-    while True:
-        try:
-            await send_lesson_reminders(application)
-        except Exception as e:
-            logger.error(f"Error in notification scheduler: {e}")
-        
-        # Проверяем каждую минуту
-        await asyncio.sleep(60)
 
 
 def main() -> None:
@@ -83,23 +65,18 @@ def main() -> None:
         message_handlers.any_message_handler
     ))
 
-    # 7. Запускаем планировщик уведомлений в фоновом режиме
-    job_queue = application.job_queue
-    if job_queue:
-        # Добавляем задачу для немедленной отправки уведомлений (через 2 минуты после старта)
-        job_queue.run_once(
-            callback=lambda context: asyncio.create_task(send_immediate_reminders(application)),
-            when=120  # через 2 минуты после старта
-        )
-        logger.info("Immediate lesson reminder scheduled for 2 minutes after startup")
-        
-        # Добавляем задачу для проверки уведомлений каждую минуту
-        job_queue.run_repeating(
-            callback=lambda context: asyncio.create_task(send_lesson_reminders(application)),
-            interval=60,  # каждые 60 секунд
-            first=300     # первый запуск через 5 минут после старта (после немедленной отправки)
-        )
-        logger.info("Free lesson notification scheduler started")
+    # 7. Отправляем уведомления сразу при старте
+    async def startup_callback(application):
+        """Отправляет уведомления при старте бота."""
+        logger.info("Bot started, sending immediate reminders...")
+        try:
+            await send_lesson_reminders(application, force_send=True)
+            logger.info("Startup reminders sent successfully")
+        except Exception as e:
+            logger.error(f"Error sending startup reminders: {e}")
+
+    # Добавляем callback для выполнения при старте
+    application.post_init = startup_callback
 
     # 8. Запускаем бота
     logger.info("Starting bot polling...")
