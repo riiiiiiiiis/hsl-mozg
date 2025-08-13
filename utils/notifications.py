@@ -45,11 +45,15 @@ def should_send_notification():
     minutes_until = time_until_lesson.total_seconds() / 60
     return 14 <= minutes_until <= 16
 
-async def send_lesson_reminders(application: Application):
+async def send_lesson_reminders(application: Application, force_send=False):
     """
     Отправляет напоминания о бесплатном уроке всем зарегистрированным пользователям.
+    
+    Args:
+        application: Telegram Application instance
+        force_send: Если True, отправляет уведомления независимо от времени
     """
-    if not should_send_notification():
+    if not force_send and not should_send_notification():
         return
     
     # Получаем всех пользователей, которым ещё не отправили уведомление

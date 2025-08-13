@@ -21,6 +21,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def send_immediate_reminders(application: Application):
+    """Отправляет напоминания сразу после запуска бота (для экстренных случаев)."""
+    try:
+        logger.info("Sending immediate lesson reminders...")
+        await send_lesson_reminders(application, force_send=True)
+        logger.info("Immediate reminders sent successfully")
+    except Exception as e:
+        logger.error(f"Error sending immediate reminders: {e}")
+
 async def notification_scheduler(application: Application):
     """Периодически проверяет и отправляет уведомления о бесплатном уроке."""
     while True:
@@ -77,11 +86,18 @@ def main() -> None:
     # 7. Запускаем планировщик уведомлений в фоновом режиме
     job_queue = application.job_queue
     if job_queue:
+        # Добавляем задачу для немедленной отправки уведомлений (через 2 минуты после старта)
+        job_queue.run_once(
+            callback=lambda context: asyncio.create_task(send_immediate_reminders(application)),
+            when=120  # через 2 минуты после старта
+        )
+        logger.info("Immediate lesson reminder scheduled for 2 minutes after startup")
+        
         # Добавляем задачу для проверки уведомлений каждую минуту
         job_queue.run_repeating(
             callback=lambda context: asyncio.create_task(send_lesson_reminders(application)),
             interval=60,  # каждые 60 секунд
-            first=10      # первый запуск через 10 секунд после старта
+            first=300     # первый запуск через 5 минут после старта (после немедленной отправки)
         )
         logger.info("Free lesson notification scheduler started")
 
