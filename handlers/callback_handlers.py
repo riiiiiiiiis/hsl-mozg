@@ -10,6 +10,7 @@ from db import courses as db_courses
 from db import bookings as db_bookings
 from db import events as db_events
 from db import referrals as db_referrals
+from db import free_lessons as db_free_lessons
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_cancel_reservation(query, context)
     elif data.startswith(constants.CALLBACK_ADMIN_APPROVE_PAYMENT):
         await handle_admin_approve(query, context)
+    elif data == constants.CALLBACK_FREE_LESSON_INFO:
+        await handle_free_lesson_info(query, context)
+    elif data == constants.CALLBACK_FREE_LESSON_REGISTER:
+        await handle_free_lesson_register(query, context)
     else:
         logger.warning(f"Unhandled callback data: {data} from user {user.id}")
         # Логируем неизвестные callback'и
@@ -241,3 +246,62 @@ async def handle_admin_approve(query, context):
         )
     else:
         await query.edit_message_text(f"⚠️ Не удалось подтвердить заявку №{booking_id}. Возможно, она уже обработана.")
+
+async def handle_free_lesson_info(query, context):
+    """Shows information about the free lesson."""
+    user_id = context.user_data['user_id']
+    
+    # Логируем просмотр информации о бесплатном уроке
+    db_events.log_event(
+        user_id, 
+        'free_lesson_info_viewed',
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
+    
+    # Проверяем, зарегистрирован ли пользователь
+    is_registered = db_free_lessons.is_user_registered(user_id)
+    
+    text = (
+        f"<b>{constants.FREE_LESSON['title']}</b>\n\n"
+        f"📅 <b>Дата:</b> {constants.FREE_LESSON['date_text']}\n\n"
+        f"{constants.FREE_LESSON['description']}"
+    )
+    
+    keyboard = []
+    if is_registered:
+        # Если уже зарегистрирован, показываем соответствующее сообщение
+        registration = db_free_lessons.get_registration_by_user(user_id)
+        text += f"\n\n✅ <b>Вы уже зарегистрированы!</b>\n📧 Email: {registration['email']}\n🔔 Ссылка будет отправлена за 15 минут до начала."
+    else:
+        # Если не зарегистрирован, показываем кнопку регистрации
+        keyboard.append([InlineKeyboardButton("📝 Записаться на урок", callback_data=constants.CALLBACK_FREE_LESSON_REGISTER)])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML', disable_web_page_preview=True)
+
+async def handle_free_lesson_register(query, context):
+    """Initiates free lesson registration process."""
+    user_id = context.user_data['user_id']
+    
+    # Проверяем, не зарегистрирован ли пользователь уже
+    if db_free_lessons.is_user_registered(user_id):
+        registration = db_free_lessons.get_registration_by_user(user_id)
+        message = constants.FREE_LESSON_ALREADY_REGISTERED.format(
+            date=constants.FREE_LESSON['date_text']
+        )
+        await query.edit_message_text(message, parse_mode='HTML')
+        return
+    
+    # Устанавливаем состояние ожидания email
+    context.user_data['awaiting_free_lesson_email'] = True
+    
+    # Логируем начало регистрации
+    db_events.log_event(
+        user_id, 
+        'free_lesson_registration_started',
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
+    
+    await query.edit_message_text(constants.FREE_LESSON_EMAIL_REQUEST, parse_mode='HTML')

@@ -1,5 +1,6 @@
 # bot.py
 import logging
+import asyncio
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -11,12 +12,25 @@ from telegram.ext import (
 import config
 from db.base import setup_database
 from handlers import command_handlers, callback_handlers, message_handlers
+from utils.notifications import send_lesson_reminders
 
 # Настройка логирования
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+async def notification_scheduler(application: Application):
+    """Периодически проверяет и отправляет уведомления о бесплатном уроке."""
+    while True:
+        try:
+            await send_lesson_reminders(application)
+        except Exception as e:
+            logger.error(f"Error in notification scheduler: {e}")
+        
+        # Проверяем каждую минуту
+        await asyncio.sleep(60)
 
 
 def main() -> None:
@@ -60,7 +74,18 @@ def main() -> None:
         message_handlers.any_message_handler
     ))
 
-    # 7. Запускаем бота
+    # 7. Запускаем планировщик уведомлений в фоновом режиме
+    job_queue = application.job_queue
+    if job_queue:
+        # Добавляем задачу для проверки уведомлений каждую минуту
+        job_queue.run_repeating(
+            callback=lambda context: asyncio.create_task(send_lesson_reminders(application)),
+            interval=60,  # каждые 60 секунд
+            first=10      # первый запуск через 10 секунд после старта
+        )
+        logger.info("Free lesson notification scheduler started")
+
+    # 8. Запускаем бота
     logger.info("Starting bot polling...")
     application.run_polling()
 

@@ -87,6 +87,19 @@ def setup_database():
                 );
             """)
 
+            # 6. Таблица регистраций на бесплатный урок
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS free_lesson_registrations (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL UNIQUE,
+                    username TEXT,
+                    first_name TEXT,
+                    email TEXT NOT NULL,
+                    registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    notification_sent BOOLEAN DEFAULT FALSE
+                );
+            """)
+
         conn.commit()
         logger.info("Database setup complete. All tables are verified.")
     except Exception as e:

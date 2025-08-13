@@ -55,6 +55,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_courses = db_courses.get_active_courses()
     
     keyboard = []
+    
+    # Добавляем кнопку бесплатного урока, если он активен
+    if constants.FREE_LESSON.get('is_active', False):
+        keyboard.append([InlineKeyboardButton(
+            constants.FREE_LESSON['button_text'], 
+            callback_data=constants.CALLBACK_FREE_LESSON_INFO
+        )])
+    
+    # Добавляем кнопки курсов
     if active_courses:
         for course in active_courses:
             callback_data = f"{constants.CALLBACK_SELECT_COURSE_PREFIX}{course['id']}"
@@ -63,7 +72,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_text = "Привет! Добро пожаловать в школу HashSlash! 👋\n\n" \
                        "Выберите интересующий вас курс из списка ниже:"
     else:
-        message_text = "К сожалению, сейчас нет доступных курсов. Загляните попозже!"
+        message_text = "Привет! Добро пожаловать в школу HashSlash! 👋\n\n" \
+                       "Выберите интересующий вас вариант:"
 
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode='HTML', disable_web_page_preview=True)

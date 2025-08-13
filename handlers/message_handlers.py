@@ -8,6 +8,7 @@ import constants
 from utils import escape_markdown_v2
 from db import bookings as db_bookings
 from db import events as db_events
+from db import free_lessons as db_free_lessons
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,13 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles any message (text, video, document, etc.) when user has active booking."""
+    """Handles any message (text, video, document, etc.) when user has active booking or awaiting email."""
     user = update.message.from_user
+    
+    # Check if user is awaiting email input for free lesson registration
+    if context.user_data.get('awaiting_free_lesson_email', False):
+        await handle_email_input(update, context)
+        return
     
     # Check if user has any active booking (pending, uploaded, or approved)
     booking_record = db_bookings.get_active_booking_by_user(user.id)
@@ -189,3 +195,62 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_to_message_id=forwarded_message.message_id,
             parse_mode=ParseMode.MARKDOWN_V2
         )
+
+async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles email input for free lesson registration."""
+    user = update.message.from_user
+    
+    # Проверяем, что это текстовое сообщение
+    if not update.message.text:
+        await update.message.reply_text(
+            "Пожалуйста, отправьте ваш email адрес текстовым сообщением.",
+            parse_mode='HTML'
+        )
+        return
+    
+    email = update.message.text.strip()
+    
+    # Валидируем email
+    if not db_free_lessons.validate_email(email):
+        await update.message.reply_text(
+            constants.FREE_LESSON_EMAIL_INVALID,
+            parse_mode='HTML'
+        )
+        return
+    
+    # Создаём регистрацию
+    registration_id = db_free_lessons.create_free_lesson_registration(
+        user.id,
+        user.username,
+        user.first_name,
+        email
+    )
+    
+    if registration_id:
+        # Успешная регистрация
+        # Сбрасываем состояние
+        context.user_data.pop('awaiting_free_lesson_email', None)
+        
+        # Логируем успешную регистрацию
+        db_events.log_event(
+            user.id, 
+            'free_lesson_registered',
+            details={'email': email, 'registration_id': registration_id},
+            username=user.username,
+            first_name=user.first_name
+        )
+        
+        success_message = constants.FREE_LESSON_REGISTRATION_SUCCESS.format(
+            date=constants.FREE_LESSON['date_text'],
+            email=email
+        )
+        
+        await update.message.reply_text(success_message, parse_mode='HTML')
+        logger.info(f"User {user.id} successfully registered for free lesson with email {email}")
+    else:
+        # Ошибка регистрации
+        await update.message.reply_text(
+            "Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.",
+            parse_mode='HTML'
+        )
+        logger.error(f"Failed to register user {user.id} for free lesson with email {email}")
