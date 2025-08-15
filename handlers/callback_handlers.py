@@ -256,8 +256,8 @@ async def handle_free_lesson_info(query, context):
         first_name=context.user_data['first_name']
     )
     
-    # Проверяем, зарегистрирован ли пользователь
-    is_registered = db_free_lessons.is_user_registered(user_id)
+    # Проверяем, зарегистрирован ли пользователь на текущий урок (cursor_lesson)
+    is_registered = db_free_lessons.is_user_registered_for_lesson_type(user_id, 'cursor_lesson')
     
     text = (
         f"<b>{constants.FREE_LESSON['title']}</b>\n\n"
@@ -267,11 +267,11 @@ async def handle_free_lesson_info(query, context):
     
     keyboard = []
     if is_registered:
-        # Если уже зарегистрирован, показываем соответствующее сообщение
-        registration = db_free_lessons.get_registration_by_user(user_id)
+        # Если уже зарегистрирован на текущий урок, показываем соответствующее сообщение
+        registration = db_free_lessons.get_registration_by_user_and_type(user_id, 'cursor_lesson')
         text += f"\n\n✅ <b>Вы уже зарегистрированы!</b>\n📧 Email: {registration['email']}\n🔔 Ссылка будет отправлена за 15 минут до начала."
     else:
-        # Если не зарегистрирован, показываем кнопку регистрации
+        # Если не зарегистрирован на текущий урок, показываем кнопку регистрации
         keyboard.append([InlineKeyboardButton("📝 Записаться на урок", callback_data=constants.CALLBACK_FREE_LESSON_REGISTER)])
     
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
@@ -281,9 +281,9 @@ async def handle_free_lesson_register(query, context):
     """Initiates free lesson registration process."""
     user_id = context.user_data['user_id']
     
-    # Проверяем, не зарегистрирован ли пользователь уже
-    if db_free_lessons.is_user_registered(user_id):
-        registration = db_free_lessons.get_registration_by_user(user_id)
+    # Проверяем, не зарегистрирован ли пользователь уже на текущий урок (cursor_lesson)
+    if db_free_lessons.is_user_registered_for_lesson_type(user_id, 'cursor_lesson'):
+        registration = db_free_lessons.get_registration_by_user_and_type(user_id, 'cursor_lesson')
         message = constants.FREE_LESSON_ALREADY_REGISTERED.format(
             date=constants.FREE_LESSON['date_text']
         )

@@ -201,3 +201,49 @@ def get_all_registrations_with_type():
         return []
     finally:
         conn.close()
+
+def is_user_registered_for_lesson_type(user_id, lesson_type='cursor_lesson'):
+    """Checks if user is registered for specific lesson type."""
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    if lesson_type not in valid_lesson_types:
+        logger.warning(f"Invalid lesson_type: {lesson_type}")
+        return False
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT id FROM free_lesson_registrations 
+                WHERE user_id = %s AND lesson_type = %s
+            """, (user_id, lesson_type))
+            
+            result = cur.fetchone()
+            return result is not None
+    except Exception as e:
+        logger.error(f"Error checking registration for user {user_id} and lesson type {lesson_type}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_registration_by_user_and_type(user_id, lesson_type='cursor_lesson'):
+    """Gets free lesson registration by user ID and lesson type."""
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    if lesson_type not in valid_lesson_types:
+        logger.warning(f"Invalid lesson_type: {lesson_type}")
+        return None
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM free_lesson_registrations 
+                WHERE user_id = %s AND lesson_type = %s
+            """, (user_id, lesson_type))
+            
+            result = cur.fetchone()
+            return dict(result) if result else None
+    except Exception as e:
+        logger.error(f"Error getting registration for user {user_id} and lesson type {lesson_type}: {e}")
+        return None
+    finally:
+        conn.close()
