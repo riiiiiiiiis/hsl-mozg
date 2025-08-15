@@ -3,15 +3,15 @@ from psycopg2.extras import DictCursor
 from db.base import get_db_connection
 from db import events as db_events
 
-def create_booking(user_id, username, first_name, course_id, referral_code, discount_percent):
-    """Creates a new booking record and returns the new booking ID."""
+def create_booking(user_id, username, first_name, course_id, referral_code, discount_percent, course_stream='4th_stream'):
+    """Creates a new booking record with course stream tracking and returns the new booking ID."""
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute(
-                """INSERT INTO bookings (user_id, username, first_name, course_id, referral_code, discount_percent)
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                (user_id, username, first_name, course_id, referral_code, discount_percent)
+                """INSERT INTO bookings (user_id, username, first_name, course_id, referral_code, discount_percent, course_stream)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (user_id, username, first_name, course_id, referral_code, discount_percent, course_stream)
             )
             booking_id = cursor.fetchone()['id']
             conn.commit()
@@ -108,5 +108,71 @@ def get_booking_details(booking_id):
                 WHERE b.id = %s
             """, (booking_id,))
             return cursor.fetchone()
+    finally:
+        conn.close()
+
+def get_bookings_by_stream(course_stream):
+    """Gets bookings filtered by course stream."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            cursor.execute("""
+                SELECT b.*, c.name as course_name
+                FROM bookings b
+                JOIN courses c ON b.course_id = c.id
+                WHERE b.course_stream = %s
+                ORDER BY b.created_at DESC
+            """, (course_stream,))
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+    finally:
+        conn.close()
+
+def get_booking_stats_by_stream():
+    """Gets booking statistics grouped by course stream."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            cursor.execute("""
+                SELECT 
+                    course_stream,
+                    COUNT(*) as total_bookings,
+                    COUNT(CASE WHEN confirmed = 0 THEN 1 END) as pending,
+                    COUNT(CASE WHEN confirmed = 1 THEN 1 END) as payment_uploaded,
+                    COUNT(CASE WHEN confirmed = 2 THEN 1 END) as approved,
+                    COUNT(CASE WHEN confirmed = -1 THEN 1 END) as cancelled
+                FROM bookings 
+                GROUP BY course_stream
+                ORDER BY course_stream
+            """)
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+    finally:
+        conn.close()
+
+def get_all_bookings_with_stream():
+    """Gets all bookings with course stream information for admin interface."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            cursor.execute("""
+                SELECT 
+                    b.id,
+                    b.user_id,
+                    b.username,
+                    b.first_name,
+                    b.course_id,
+                    c.name as course_name,
+                    b.confirmed,
+                    b.course_stream,
+                    b.created_at,
+                    b.referral_code,
+                    b.discount_percent
+                FROM bookings b
+                JOIN courses c ON b.course_id = c.id
+                ORDER BY b.created_at DESC
+            """)
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
     finally:
         conn.close()

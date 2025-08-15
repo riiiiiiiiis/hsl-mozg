@@ -16,6 +16,66 @@ def get_db_connection():
         logger.critical(f"Could not connect to PostgreSQL database: {e}")
         raise
 
+def check_column_exists(cursor, table_name, column_name):
+    """Check if a column exists in a table."""
+    cursor.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = %s AND column_name = %s
+    """, (table_name, column_name))
+    return cursor.fetchone() is not None
+
+def run_migrations():
+    """Run database migrations for lesson types and course streams."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            logger.info("Running database migrations...")
+            
+            # Add lesson_type column to free_lesson_registrations
+            if not check_column_exists(cur, 'free_lesson_registrations', 'lesson_type'):
+                logger.info("Adding lesson_type column to free_lesson_registrations...")
+                cur.execute("""
+                    ALTER TABLE free_lesson_registrations 
+                    ADD COLUMN lesson_type VARCHAR(50) DEFAULT 'cursor_lesson'
+                """)
+                
+                # Update existing registrations to 'vibecoding_lesson'
+                cur.execute("""
+                    UPDATE free_lesson_registrations 
+                    SET lesson_type = 'vibecoding_lesson' 
+                    WHERE lesson_type = 'cursor_lesson'
+                """)
+                updated_count = cur.rowcount
+                logger.info(f"Added lesson_type column and updated {updated_count} existing registrations to 'vibecoding_lesson'")
+            
+            # Add course_stream column to bookings
+            if not check_column_exists(cur, 'bookings', 'course_stream'):
+                logger.info("Adding course_stream column to bookings...")
+                cur.execute("""
+                    ALTER TABLE bookings 
+                    ADD COLUMN course_stream VARCHAR(50) DEFAULT '4th_stream'
+                """)
+                
+                # Update existing bookings to '3rd_stream'
+                cur.execute("""
+                    UPDATE bookings 
+                    SET course_stream = '3rd_stream' 
+                    WHERE course_stream = '4th_stream'
+                """)
+                updated_bookings = cur.rowcount
+                logger.info(f"Added course_stream column and updated {updated_bookings} existing bookings to '3rd_stream'")
+            
+        conn.commit()
+        logger.info("Database migrations completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Error during migrations: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def setup_database():
     """Ensures all required tables exist in the database."""
     conn = get_db_connection()
@@ -45,7 +105,8 @@ def setup_database():
                     confirmed INTEGER DEFAULT 0,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     referral_code TEXT,
-                    discount_percent INTEGER DEFAULT 0
+                    discount_percent INTEGER DEFAULT 0,
+                    course_stream VARCHAR(50) DEFAULT '4th_stream'
                 );
             """)
 
@@ -96,7 +157,8 @@ def setup_database():
                     first_name TEXT,
                     email TEXT NOT NULL,
                     registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    notification_sent BOOLEAN DEFAULT FALSE
+                    notification_sent BOOLEAN DEFAULT FALSE,
+                    lesson_type VARCHAR(50) DEFAULT 'cursor_lesson'
                 );
             """)
 
@@ -108,3 +170,6 @@ def setup_database():
         raise
     finally:
         conn.close()
+    
+    # Run migrations after table setup
+    run_migrations()

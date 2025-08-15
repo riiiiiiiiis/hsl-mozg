@@ -11,30 +11,37 @@ def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-def create_free_lesson_registration(user_id, username, first_name, email):
-    """Creates a new free lesson registration."""
+def create_free_lesson_registration(user_id, username, first_name, email, lesson_type='cursor_lesson'):
+    """Creates a new free lesson registration with lesson type."""
     if not validate_email(email):
         logger.warning(f"Invalid email format: {email}")
         return False
+    
+    # Validate lesson_type
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    if lesson_type not in valid_lesson_types:
+        logger.warning(f"Invalid lesson_type: {lesson_type}. Using default 'cursor_lesson'")
+        lesson_type = 'cursor_lesson'
     
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             cur.execute("""
-                INSERT INTO free_lesson_registrations (user_id, username, first_name, email)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO free_lesson_registrations (user_id, username, first_name, email, lesson_type)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (user_id) DO UPDATE SET
                     username = EXCLUDED.username,
                     first_name = EXCLUDED.first_name,
                     email = EXCLUDED.email,
+                    lesson_type = EXCLUDED.lesson_type,
                     registered_at = CURRENT_TIMESTAMP,
                     notification_sent = FALSE
                 RETURNING id;
-            """, (user_id, username, first_name, email))
+            """, (user_id, username, first_name, email, lesson_type))
             
             registration_id = cur.fetchone()['id']
             conn.commit()
-            logger.info(f"Free lesson registration created/updated for user {user_id}, registration ID: {registration_id}")
+            logger.info(f"Free lesson registration created/updated for user {user_id}, lesson_type: {lesson_type}, registration ID: {registration_id}")
             return registration_id
     except Exception as e:
         logger.error(f"Error creating free lesson registration: {e}")
@@ -117,5 +124,80 @@ def get_registration_count():
     except Exception as e:
         logger.error(f"Error getting registration count: {e}")
         return 0
+    finally:
+        conn.close()
+
+def get_registrations_by_type(lesson_type):
+    """Gets registrations filtered by lesson type."""
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    if lesson_type not in valid_lesson_types:
+        logger.warning(f"Invalid lesson_type: {lesson_type}")
+        return []
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM free_lesson_registrations 
+                WHERE lesson_type = %s
+                ORDER BY registered_at ASC
+            """, (lesson_type,))
+            
+            results = cur.fetchall()
+            return [dict(row) for row in results]
+    except Exception as e:
+        logger.error(f"Error getting registrations by type {lesson_type}: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_registration_stats():
+    """Gets registration statistics grouped by lesson type."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    lesson_type,
+                    COUNT(*) as total_registrations,
+                    COUNT(CASE WHEN notification_sent = TRUE THEN 1 END) as notifications_sent,
+                    COUNT(CASE WHEN notification_sent = FALSE THEN 1 END) as pending_notifications
+                FROM free_lesson_registrations 
+                GROUP BY lesson_type
+                ORDER BY lesson_type
+            """)
+            
+            results = cur.fetchall()
+            return [dict(row) for row in results]
+    except Exception as e:
+        logger.error(f"Error getting registration statistics: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_all_registrations_with_type():
+    """Gets all registrations with lesson type information for admin interface."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    id,
+                    user_id,
+                    username,
+                    first_name,
+                    email,
+                    lesson_type,
+                    registered_at,
+                    notification_sent
+                FROM free_lesson_registrations 
+                ORDER BY registered_at DESC
+            """)
+            
+            results = cur.fetchall()
+            return [dict(row) for row in results]
+    except Exception as e:
+        logger.error(f"Error getting all registrations with type: {e}")
+        return []
     finally:
         conn.close()
