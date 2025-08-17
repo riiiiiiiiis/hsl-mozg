@@ -5,12 +5,19 @@ from telegram.constants import ParseMode
 
 import config
 import constants
-from utils import escape_markdown_v2
+from utils import escape_markdown_v2, get_user_identification, get_course_flow_info
 from db import bookings as db_bookings
 from db import events as db_events
 from db import free_lessons as db_free_lessons
 
 logger = logging.getLogger(__name__)
+
+def get_start_date_for_course(course_id):
+    """Get start date text for a course from constants."""
+    for course in constants.COURSES:
+        if course['id'] == course_id:
+            return course.get('start_date_text', 'дата не указана')
+    return 'дата не указана'
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photo uploads for payment confirmation."""
@@ -32,6 +39,18 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     booking_id = booking_record['id']
     course_name = booking_record['course_name']
+    course_stream = booking_record.get('course_stream', '4th_stream')
+    
+    # Get course ID for start date lookup
+    course_id = None
+    for course in constants.COURSES:
+        if course['name'] == course_name:
+            course_id = course['id']
+            break
+    
+    # Get start date and format course flow info
+    start_date_text = get_start_date_for_course(course_id) if course_id else 'дата не указана'
+    course_flow_info = get_course_flow_info(course_stream, start_date_text)
 
     if not db_bookings.update_booking_status(booking_id, 1):
         await update.message.reply_text("Произошла ошибка при обновлении статуса заявки.")
@@ -50,11 +69,19 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("TARGET_CHAT_ID is not set. Cannot forward photo to admin.")
         return
 
+    # Enhanced user identification
+    user_identification = get_user_identification({
+        'username': user.username,
+        'first_name': user.first_name,
+        'user_id': user.id
+    })
+
     caption_for_admin = (
         f"🧾 *Новый чек для проверки\!*\n"
-        f"Пользователь: {escape_markdown_v2(user.first_name)} \(ID: `{user.id}`\)\n"
+        f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
         f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
-        f"Курс: *{escape_markdown_v2(course_name)}*"
+        f"Курс: *{escape_markdown_v2(course_name)}*\n"
+        f"Поток: *{escape_markdown_v2(course_flow_info)}*"
     )
 
     forwarded_message = await context.bot.forward_message(
@@ -96,13 +123,12 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     booking_id = booking_record['id']
     course_id = booking_record['course_id']
     booking_status = booking_record['status']
+    course_stream = booking_record.get('course_stream', '4th_stream')
+    course_name = booking_record.get('course_name', "Неизвестный курс")
     
-    # Get course name from constants
-    course_name = "Неизвестный курс"
-    for course in constants.COURSES:
-        if course['id'] == course_id:
-            course_name = course['name']
-            break
+    # Get start date and format course flow info
+    start_date_text = get_start_date_for_course(course_id)
+    course_flow_info = get_course_flow_info(course_stream, start_date_text)
     
     # Log the event with appropriate type based on booking status
     event_type = 'student_response' if booking_status == 2 else 'alternative_payment_proof'
@@ -153,14 +179,22 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message_id=update.message.message_id
     )
     
+    # Enhanced user identification
+    user_identification = get_user_identification({
+        'username': user.username,
+        'first_name': user.first_name,
+        'user_id': user.id
+    })
+
     # Send admin notification with different caption based on status
     if booking_status == 2:
         # Student response after approval
         caption_for_admin = (
             f"💬 *Ответ студента*\n"
-            f"Пользователь: {escape_markdown_v2(user.first_name)} \(ID: `{user.id}`\)\n"
+            f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
             f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
             f"Курс: *{escape_markdown_v2(course_name)}*\n"
+            f"Поток: *{escape_markdown_v2(course_flow_info)}*\n"
             f"Статус: ✅ Оплачено"
         )
         # No approve button for already approved bookings
@@ -175,9 +209,10 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         status_text = "⏳ Ожидает проверки" if booking_status == 1 else "📝 Новая заявка"
         caption_for_admin = (
             f"📩 *Альтернативное подтверждение оплаты\!*\n"
-            f"Пользователь: {escape_markdown_v2(user.first_name)} \(ID: `{user.id}`\)\n"
+            f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
             f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
             f"Курс: *{escape_markdown_v2(course_name)}*\n"
+            f"Поток: *{escape_markdown_v2(course_flow_info)}*\n"
             f"Статус: {escape_markdown_v2(status_text)}"
         )
         

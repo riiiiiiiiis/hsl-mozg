@@ -5,7 +5,7 @@ from telegram.constants import ParseMode
 
 import config
 import constants
-from utils import escape_markdown_v2
+from utils import escape_markdown_v2, get_approval_timestamp
 from db import courses as db_courses
 from db import bookings as db_bookings
 from db import events as db_events
@@ -208,7 +208,39 @@ async def handle_admin_approve(query, context):
             username=None,  # username цели получим из bookings
             first_name=None
         )
-        await query.edit_message_text(f"✅ Оплата для заявки №{booking_id} (Пользователь {target_user_id}) ПОДТВЕРЖДЕНА.")
+        
+        # Preserve original message content and append approval status
+        try:
+            # First, remove the inline keyboard while keeping the content
+            await query.edit_message_reply_markup(reply_markup=None)
+            
+            # Then append approval status to the original message
+            original_text = query.message.text or query.message.caption or ""
+            approval_timestamp = get_approval_timestamp()
+            approval_status = f"\n\n✅ ОДОБРЕНО - {approval_timestamp}"
+            
+            # Update message with appended approval status
+            updated_text = original_text + approval_status
+            
+            # Try to edit the message text/caption
+            if query.message.text:
+                await query.edit_message_text(updated_text)
+            elif query.message.caption:
+                await query.edit_message_caption(caption=updated_text)
+            else:
+                # Fallback: send a new message if we can't edit
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"✅ Оплата для заявки №{booking_id} (Пользователь {target_user_id}) ПОДТВЕРЖДЕНА. {approval_timestamp}"
+                )
+                
+        except Exception as e:
+            logger.warning(f"Failed to preserve message content for booking {booking_id}: {e}")
+            # Fallback to current behavior
+            try:
+                await query.edit_message_text(f"✅ Оплата для заявки №{booking_id} (Пользователь {target_user_id}) ПОДТВЕРЖДЕНА.")
+            except Exception as fallback_error:
+                logger.error(f"Fallback message edit also failed for booking {booking_id}: {fallback_error}")
         
         booking_details = db_bookings.get_booking_details(booking_id)
         is_consultation = False # Placeholder, add logic if consultation courses exist
