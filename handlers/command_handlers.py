@@ -56,11 +56,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = []
     
-    # Добавляем кнопку бесплатного урока, если он активен
-    if constants.FREE_LESSON.get('is_active', False):
+    # Добавляем кнопки бесплатных уроков, если они активны
+    active_lessons = constants.get_active_lessons()
+    for lesson_type, lesson_data in active_lessons.items():
+        callback_data = f"{constants.CALLBACK_FREE_LESSON_PREFIX}{lesson_data['id']}"
         keyboard.append([InlineKeyboardButton(
-            constants.FREE_LESSON['button_text'], 
-            callback_data=constants.CALLBACK_FREE_LESSON_INFO
+            lesson_data['button_text'], 
+            callback_data=callback_data
         )])
     
     # Добавляем кнопки курсов

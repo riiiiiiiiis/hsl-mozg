@@ -253,30 +253,42 @@ async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Создаём регистрацию
+    # Получаем lesson_type из context или используем fallback
+    lesson_type = context.user_data.get('pending_lesson_type', 'cursor_lesson')
+    lesson_data = constants.get_lesson_by_type(lesson_type)
+    
+    # Создаём регистрацию с указанием lesson_type
     registration_id = db_free_lessons.create_free_lesson_registration(
         user.id,
         user.username,
         user.first_name,
-        email
+        email,
+        lesson_type=lesson_type
     )
     
     if registration_id:
         # Успешная регистрация
         # Сбрасываем состояние
         context.user_data.pop('awaiting_free_lesson_email', None)
+        context.user_data.pop('pending_lesson_type', None)
         
         # Логируем успешную регистрацию
         db_events.log_event(
             user.id, 
             'free_lesson_registered',
-            details={'email': email, 'registration_id': registration_id},
+            details={'email': email, 'registration_id': registration_id, 'lesson_type': lesson_type},
             username=user.username,
             first_name=user.first_name
         )
         
+        # Формируем сообщение об успешной регистрации
+        if lesson_data:
+            date_info = lesson_data['description']  # Description contains full info including date
+        else:
+            date_info = 'информация о дате будет отправлена дополнительно'
+        
         success_message = constants.FREE_LESSON_REGISTRATION_SUCCESS.format(
-            date=constants.FREE_LESSON['date_text'],
+            date=date_info,
             email=email
         )
         

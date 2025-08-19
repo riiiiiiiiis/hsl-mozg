@@ -34,9 +34,14 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_cancel_reservation(query, context)
     elif data.startswith(constants.CALLBACK_ADMIN_APPROVE_PAYMENT):
         await handle_admin_approve(query, context)
-    elif data == constants.CALLBACK_FREE_LESSON_INFO:
+    elif data.startswith(constants.CALLBACK_FREE_LESSON_PREFIX):
+        await handle_free_lesson_by_id(query, context)
+    elif data.startswith(constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX):
+        await handle_free_lesson_register_by_id(query, context)
+    # Legacy handlers (deprecated but kept for backward compatibility)
+    elif data == constants.CALLBACK_FREE_LESSON_INFO if hasattr(constants, 'CALLBACK_FREE_LESSON_INFO') else False:
         await handle_free_lesson_info(query, context)
-    elif data == constants.CALLBACK_FREE_LESSON_REGISTER:
+    elif data == constants.CALLBACK_FREE_LESSON_REGISTER if hasattr(constants, 'CALLBACK_FREE_LESSON_REGISTER') else False:
         await handle_free_lesson_register(query, context)
     else:
         logger.warning(f"Unhandled callback data: {data} from user {user.id}")
@@ -329,6 +334,86 @@ async def handle_free_lesson_register(query, context):
     db_events.log_event(
         user_id, 
         'free_lesson_registration_started',
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
+    
+    await query.edit_message_text(constants.FREE_LESSON_EMAIL_REQUEST, parse_mode='HTML')
+
+
+async def handle_free_lesson_by_id(query, context):
+    """Shows information about a specific lesson by ID"""
+    try:
+        lesson_id = int(query.data.replace(constants.CALLBACK_FREE_LESSON_PREFIX, ''))
+    except ValueError:
+        await query.edit_message_text("Ошибка: неверный ID урока")
+        return
+    
+    lesson_type, lesson_data = constants.get_lesson_by_id(lesson_id)
+    if not lesson_data:
+        await query.edit_message_text("Урок не найден")
+        return
+    
+    user_id = context.user_data['user_id']
+    
+    # Логируем просмотр информации о конкретном уроке
+    db_events.log_event(
+        user_id, 
+        'free_lesson_info_viewed',
+        details={'lesson_type': lesson_type, 'lesson_id': lesson_id},
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
+    
+    # Проверяем, зарегистрирован ли пользователь на этот конкретный урок
+    is_registered = db_free_lessons.is_user_registered_for_lesson_type(user_id, lesson_type)
+    
+    text = f"<b>{lesson_data['title']}</b>\n\n{lesson_data['description']}"
+    
+    keyboard = []
+    if is_registered:
+        message = constants.FREE_LESSON_ALREADY_REGISTERED.format(
+            date=lesson_data['description']  # Description contains the date and all info
+        )
+        await query.edit_message_text(message, parse_mode='HTML')
+    else:
+        register_callback = f"{constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX}{lesson_id}"
+        keyboard.append([InlineKeyboardButton("📝 Записаться", callback_data=register_callback)])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+
+
+async def handle_free_lesson_register_by_id(query, context):
+    """Starts registration process for a specific lesson by ID"""
+    try:
+        lesson_id = int(query.data.replace(constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX, ''))
+    except ValueError:
+        await query.edit_message_text("Ошибка: неверный ID урока")
+        return
+    
+    lesson_type, lesson_data = constants.get_lesson_by_id(lesson_id)
+    if not lesson_data:
+        await query.edit_message_text("Урок не найден")
+        return
+    
+    user_id = context.user_data['user_id']
+    
+    # Проверяем, не записан ли пользователь уже на этот урок
+    if db_free_lessons.is_user_registered_for_lesson_type(user_id, lesson_type):
+        message = constants.FREE_LESSON_ALREADY_REGISTERED.format(
+            date=lesson_data['description']  # Description contains the date and all info
+        )
+        await query.edit_message_text(message, parse_mode='HTML')
+        return
+    
+    # Сохраняем lesson_type для последующей регистрации
+    context.user_data['pending_lesson_type'] = lesson_type
+    context.user_data['awaiting_free_lesson_email'] = True
+    
+    # Логируем начало регистрации на конкретный урок
+    db_events.log_event(
+        user_id, 
+        'free_lesson_registration_started',
+        details={'lesson_type': lesson_type, 'lesson_id': lesson_id},
         username=context.user_data['username'],
         first_name=context.user_data['first_name']
     )

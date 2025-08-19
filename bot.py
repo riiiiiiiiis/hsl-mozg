@@ -12,7 +12,7 @@ from telegram.ext import (
 import config
 from db.base import setup_database
 from handlers import command_handlers, callback_handlers, message_handlers
-from utils.notifications import send_lesson_reminders
+from utils.notifications import schedule_all_lesson_notifications
 
 # Настройка логирования
 logging.basicConfig(
@@ -65,15 +65,15 @@ def main() -> None:
         message_handlers.any_message_handler
     ))
 
-    # 7. Отправляем уведомления сразу при старте
+    # 7. Планируем уведомления для всех активных уроков при старте
     async def startup_callback(application):
-        """Отправляет уведомления при старте бота."""
-        logger.info("Bot started, sending immediate reminders...")
+        """Планирует уведомления для всех активных уроков при старте бота."""
+        logger.info("Bot started, scheduling lesson notifications...")
         try:
-            await send_lesson_reminders(application, force_send=True)
-            logger.info("Startup reminders sent successfully")
+            await schedule_all_lesson_notifications(application)
+            logger.info("All lesson notifications scheduled successfully")
         except Exception as e:
-            logger.error(f"Error sending startup reminders: {e}")
+            logger.error(f"Error scheduling notifications: {e}")
 
     # Добавляем callback для выполнения при старте
     application.post_init = startup_callback
