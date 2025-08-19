@@ -34,10 +34,10 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_cancel_reservation(query, context)
     elif data.startswith(constants.CALLBACK_ADMIN_APPROVE_PAYMENT):
         await handle_admin_approve(query, context)
-    elif data.startswith(constants.CALLBACK_FREE_LESSON_PREFIX):
-        await handle_free_lesson_by_id(query, context)
     elif data.startswith(constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX):
         await handle_free_lesson_register_by_id(query, context)
+    elif data.startswith(constants.CALLBACK_FREE_LESSON_PREFIX):
+        await handle_free_lesson_by_id(query, context)
     # Legacy handlers (deprecated but kept for backward compatibility)
     elif data == constants.CALLBACK_FREE_LESSON_INFO if hasattr(constants, 'CALLBACK_FREE_LESSON_INFO') else False:
         await handle_free_lesson_info(query, context)
