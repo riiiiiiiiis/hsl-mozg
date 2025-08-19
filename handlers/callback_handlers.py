@@ -343,9 +343,14 @@ async def handle_free_lesson_register(query, context):
 
 async def handle_free_lesson_by_id(query, context):
     """Shows information about a specific lesson by ID"""
+    logger.info(f"DEBUG: handle_free_lesson_by_id called with callback: '{query.data}'")
+    
     try:
-        lesson_id = int(query.data.replace(constants.CALLBACK_FREE_LESSON_PREFIX, ''))
+        raw_id_str = query.data.replace(constants.CALLBACK_FREE_LESSON_PREFIX, '')
+        lesson_id = int(raw_id_str)
+        logger.info(f"DEBUG: Successfully parsed lesson_id: {lesson_id} from '{query.data}'")
     except ValueError:
+        logger.error(f"ERROR: Failed to parse lesson_id from callback '{query.data}'")
         await query.edit_message_text("Ошибка: неверный ID урока")
         return
     
@@ -378,21 +383,36 @@ async def handle_free_lesson_by_id(query, context):
         await query.edit_message_text(message, parse_mode='HTML')
     else:
         register_callback = f"{constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX}{lesson_id}"
+        logger.info(f"DEBUG: Creating register button with callback: '{register_callback}' (lesson_id: {lesson_id})")
         keyboard.append([InlineKeyboardButton("📝 Записаться", callback_data=register_callback)])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 
 async def handle_free_lesson_register_by_id(query, context):
     """Starts registration process for a specific lesson by ID"""
+    # Детальное логирование для диагностики
+    logger.info(f"DEBUG: Raw callback data: '{query.data}'")
+    logger.info(f"DEBUG: Expected prefix: '{constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX}'")
+    
     try:
-        lesson_id = int(query.data.replace(constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX, ''))
-    except ValueError:
-        await query.edit_message_text("Ошибка: неверный ID урока")
+        # Логируем процесс парсинга
+        raw_id_str = query.data.replace(constants.CALLBACK_FREE_LESSON_REGISTER_PREFIX, '')
+        logger.info(f"DEBUG: After prefix removal: '{raw_id_str}'")
+        
+        lesson_id = int(raw_id_str)
+        logger.info(f"DEBUG: Parsed lesson_id: {lesson_id}")
+        
+    except ValueError as e:
+        logger.error(f"ERROR: Failed to parse lesson_id from callback '{query.data}': {e}")
+        await query.edit_message_text(f"Ошибка: неверный ID урока. Данные: {query.data}")
         return
     
     lesson_type, lesson_data = constants.get_lesson_by_id(lesson_id)
+    logger.info(f"DEBUG: Lesson lookup result - lesson_type: {lesson_type}, lesson_data: {lesson_data is not None}")
+    
     if not lesson_data:
-        await query.edit_message_text("Урок не найден")
+        logger.error(f"ERROR: Lesson with ID {lesson_id} not found in constants")
+        await query.edit_message_text(f"Урок не найден (ID: {lesson_id})")
         return
     
     user_id = context.user_data['user_id']

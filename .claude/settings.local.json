@@ -1,8 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm install:*)",
+      "mcp__railway-mcp-server__check-railway-status",
+      "mcp__railway-mcp-server__list-variables",
+      "WebSearch",
+      "Bash(python3:*)",
+      "mcp__railway-mcp-server__get-logs"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "/Users/ris/Documents/GitHub"
+    ]
   }
 }
