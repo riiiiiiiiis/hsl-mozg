@@ -420,7 +420,7 @@ async def handle_free_lesson_register_by_id(query, context):
     # Проверяем, не записан ли пользователь уже на этот урок
     if db_free_lessons.is_user_registered_for_lesson_type(user_id, lesson_type):
         message = constants.FREE_LESSON_ALREADY_REGISTERED.format(
-            date=lesson_data['description']  # Description contains the date and all info
+            date=lesson_data.get('date_text', 'Дата уточняется')  # Use date_text field instead of full description
         )
         await query.edit_message_text(message, parse_mode='HTML')
         return
