@@ -18,7 +18,7 @@ def create_free_lesson_registration(user_id, username, first_name, email, lesson
         return False
     
     # Validate lesson_type
-    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson', 'claude_code_lesson']
     if lesson_type not in valid_lesson_types:
         logger.warning(f"Invalid lesson_type: {lesson_type}. Using default 'cursor_lesson'")
         lesson_type = 'cursor_lesson'
@@ -128,7 +128,7 @@ def get_registration_count():
 
 def get_registrations_by_type(lesson_type):
     """Gets registrations filtered by lesson type."""
-    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson', 'claude_code_lesson']
     if lesson_type not in valid_lesson_types:
         logger.warning(f"Invalid lesson_type: {lesson_type}")
         return []
@@ -203,7 +203,7 @@ def get_all_registrations_with_type():
 
 def is_user_registered_for_lesson_type(user_id, lesson_type='cursor_lesson'):
     """Checks if user is registered for specific lesson type."""
-    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson', 'claude_code_lesson']
     if lesson_type not in valid_lesson_types:
         logger.warning(f"Invalid lesson_type: {lesson_type}")
         return False
@@ -226,7 +226,7 @@ def is_user_registered_for_lesson_type(user_id, lesson_type='cursor_lesson'):
 
 def get_registration_by_user_and_type(user_id, lesson_type='cursor_lesson'):
     """Gets free lesson registration by user ID and lesson type."""
-    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson']
+    valid_lesson_types = ['cursor_lesson', 'vibecoding_lesson', 'claude_code_lesson']
     if lesson_type not in valid_lesson_types:
         logger.warning(f"Invalid lesson_type: {lesson_type}")
         return None
