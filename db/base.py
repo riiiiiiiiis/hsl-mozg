@@ -66,6 +66,39 @@ def run_migrations():
                 updated_bookings = cur.rowcount
                 logger.info(f"Added course_stream column and updated {updated_bookings} existing bookings to '3rd_stream'")
             
+            # Migration: Change UNIQUE constraint from user_id to (user_id, lesson_type)
+            cur.execute("""
+                SELECT constraint_name 
+                FROM information_schema.table_constraints 
+                WHERE table_name = 'free_lesson_registrations' 
+                AND constraint_type = 'UNIQUE'
+                AND constraint_name LIKE '%user_id%'
+            """)
+            old_constraint = cur.fetchone()
+            
+            if old_constraint:
+                logger.info(f"Removing old UNIQUE constraint on user_id: {old_constraint['constraint_name']}")
+                cur.execute(f"""
+                    ALTER TABLE free_lesson_registrations 
+                    DROP CONSTRAINT {old_constraint['constraint_name']}
+                """)
+                logger.info("Old UNIQUE constraint removed")
+            
+            # Check if new composite constraint exists
+            cur.execute("""
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'free_lesson_registrations_user_id_lesson_type_key'
+            """)
+            
+            if not cur.fetchone():
+                logger.info("Adding composite UNIQUE constraint (user_id, lesson_type)")
+                cur.execute("""
+                    ALTER TABLE free_lesson_registrations 
+                    ADD CONSTRAINT free_lesson_registrations_user_id_lesson_type_key 
+                    UNIQUE (user_id, lesson_type)
+                """)
+                logger.info("Composite UNIQUE constraint added successfully")
+            
         conn.commit()
         logger.info("Database migrations completed successfully!")
         
@@ -152,13 +185,14 @@ def setup_database():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS free_lesson_registrations (
                     id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL UNIQUE,
+                    user_id BIGINT NOT NULL,
                     username TEXT,
                     first_name TEXT,
                     email TEXT NOT NULL,
                     registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     notification_sent BOOLEAN DEFAULT FALSE,
-                    lesson_type VARCHAR(50) DEFAULT 'cursor_lesson'
+                    lesson_type VARCHAR(50) DEFAULT 'cursor_lesson',
+                    UNIQUE(user_id, lesson_type)
                 );
             """)
 

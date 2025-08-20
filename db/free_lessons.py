@@ -29,11 +29,10 @@ def create_free_lesson_registration(user_id, username, first_name, email, lesson
             cur.execute("""
                 INSERT INTO free_lesson_registrations (user_id, username, first_name, email, lesson_type)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (user_id) DO UPDATE SET
+                ON CONFLICT (user_id, lesson_type) DO UPDATE SET
                     username = EXCLUDED.username,
                     first_name = EXCLUDED.first_name,
                     email = EXCLUDED.email,
-                    lesson_type = EXCLUDED.lesson_type,
                     registered_at = CURRENT_TIMESTAMP,
                     notification_sent = FALSE
                 RETURNING id;
