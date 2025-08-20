@@ -283,7 +283,7 @@ async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Формируем сообщение об успешной регистрации
         if lesson_data:
-            date_info = lesson_data['description']  # Description contains full info including date
+            date_info = lesson_data.get('date_text', 'информация о дате будет отправлена дополнительно')
         else:
             date_info = 'информация о дате будет отправлена дополнительно'
         
