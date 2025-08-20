@@ -5,7 +5,7 @@
 lessons:
   cursor_lesson:
     id: 1
-    title: "ВОРКШОП: Cursor"
+    title: "ВОРКШОП Cursor"
     button_text: "🔥 ВОРКШОП: Вайбкодинг с Cursor"
     description: |
       ВАЙБКОДИНГ С CURSOR
@@ -38,7 +38,7 @@ lessons:
   vibecoding_lesson:
     id: 2  # ID для callback данных
     title: "Основы вайбкодинга"
-    button_text: "ВОРКШОП: Основы вайбкодинга"
+    button_text: "ВОРКШОП Основы вайбкодинга"
     description: |
       ОСНОВЫ ВАЙБКОДИНГА
       
@@ -68,7 +68,7 @@ lessons:
   claude_code_lesson:
     id: 3
     title: "ВОРКШОП: Claude Code"
-    button_text: "ВОРКШОП: Claude Code"
+    button_text: "ВОРКШОП Claude Code"
     description: |
       CLAUDE CODE - МАСТЕР-КЛАСС
       
