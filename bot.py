@@ -72,14 +72,8 @@ def main() -> None:
         try:
             await schedule_all_lesson_notifications(application)
             logger.info("All lesson notifications scheduled successfully")
-            
-            # Отправляем обновленную ссылку на урок по Cursor при деплое
-            from utils.send_cursor_link import send_cursor_lesson_link
-            logger.info("Sending updated Cursor lesson link to registered users...")
-            await send_cursor_lesson_link(application.bot)
-            logger.info("Cursor lesson link sent successfully")
         except Exception as e:
-            logger.error(f"Error in startup tasks: {e}")
+            logger.error(f"Error scheduling notifications: {e}")
 
     # Добавляем callback для выполнения при старте
     application.post_init = startup_callback

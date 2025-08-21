@@ -164,3 +164,4 @@ When modifying the bot:
   - No immediate notifications sent on deployment
   - Uses precise timing based on lesson datetime minus 15 minutes
   - Logs all scheduling activities for monitoring
+- запускай локально питон только внутри виртуального окружения

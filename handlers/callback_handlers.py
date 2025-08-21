@@ -415,6 +415,20 @@ async def handle_free_lesson_register_by_id(query, context):
         await query.edit_message_text(f"Урок не найден (ID: {lesson_id})")
         return
     
+    # Проверяем, что урок еще не прошел (с учетом grace period)
+    from datetime import datetime, timedelta
+    lesson_datetime = lesson_data.get('datetime')
+    if lesson_datetime:
+        current_time = datetime.now()
+        grace_period = timedelta(hours=2)
+        if current_time > lesson_datetime + grace_period:
+            await query.edit_message_text(
+                "🕐 К сожалению, этот воркшоп уже прошел.\n\n"
+                "Следите за новыми мероприятиями в нашем боте!",
+                parse_mode='HTML'
+            )
+            return
+    
     user_id = context.user_data['user_id']
     
     # Проверяем, не записан ли пользователь уже на этот урок

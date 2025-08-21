@@ -48,13 +48,43 @@ def get_all_lessons() -> Dict:
 
 def get_active_lessons() -> Dict:
     """
-    Получить только активные уроки
+    Получить только активные уроки (is_active=True и время еще не прошло)
     
     Returns:
-        Словарь активных уроков
+        Словарь активных уроков, которые еще не прошли
     """
+    from datetime import datetime, timedelta, timezone
     lessons = load_lessons()
-    return {k: v for k, v in lessons.items() if v.get('is_active', False)}
+    
+    # Получаем текущее время с учетом временной зоны
+    current_time = datetime.now(timezone.utc)
+    
+    active_lessons = {}
+    for k, v in lessons.items():
+        # Проверяем что урок активен
+        if not v.get('is_active', False):
+            continue
+        
+        # Проверяем что время урока еще не прошло (с буфером в 2 часа после начала)
+        lesson_datetime = v.get('datetime')
+        if lesson_datetime:
+            # Преобразуем lesson_datetime в UTC если у него есть временная зона
+            if lesson_datetime.tzinfo is None:
+                # Если нет временной зоны, считаем что это UTC
+                lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+            else:
+                # Конвертируем в UTC для сравнения
+                lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+            
+            # Даем 2 часа после начала урока перед тем как скрыть его
+            grace_period = timedelta(hours=2)
+            if current_time <= lesson_datetime + grace_period:
+                active_lessons[k] = v
+        else:
+            # Если нет datetime, показываем урок (для обратной совместимости)
+            active_lessons[k] = v
+    
+    return active_lessons
 
 def get_lesson_by_id(lesson_id: int) -> Tuple[Optional[str], Optional[Dict]]:
     """
