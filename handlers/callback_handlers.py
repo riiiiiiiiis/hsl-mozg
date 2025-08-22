@@ -416,10 +416,20 @@ async def handle_free_lesson_register_by_id(query, context):
         return
     
     # Проверяем, что урок еще не прошел (с учетом grace period)
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     lesson_datetime = lesson_data.get('datetime')
     if lesson_datetime:
-        current_time = datetime.now()
+        # Используем timezone-aware datetime для сравнения
+        current_time = datetime.now(timezone.utc)
+        
+        # Преобразуем lesson_datetime в UTC если у него есть временная зона
+        if lesson_datetime.tzinfo is None:
+            # Если нет временной зоны, считаем что это UTC
+            lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+        else:
+            # Конвертируем в UTC для сравнения
+            lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+        
         grace_period = timedelta(hours=2)
         if current_time > lesson_datetime + grace_period:
             await query.edit_message_text(

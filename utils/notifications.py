@@ -1,7 +1,7 @@
 # utils/notifications.py
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telegram.ext import Application
 import constants
 from db import free_lessons as db_free_lessons
@@ -34,7 +34,18 @@ async def schedule_lesson_notification(application: Application, lesson_type: st
     """
     lesson_datetime = lesson_data['datetime']
     notification_time = lesson_datetime - timedelta(minutes=15)
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
+    
+    # Преобразуем lesson_datetime и notification_time в UTC если нужно
+    if lesson_datetime.tzinfo is None:
+        lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+    else:
+        lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+    
+    if notification_time.tzinfo is None:
+        notification_time = notification_time.replace(tzinfo=timezone.utc)
+    else:
+        notification_time = notification_time.astimezone(timezone.utc)
     
     if notification_time <= current_time:
         logger.info(f"Notification time for {lesson_type} has already passed (was at {notification_time})")
@@ -136,7 +147,14 @@ def get_time_until_lesson(lesson_type: str) -> float:
         return None
     
     lesson_datetime = lesson_data['datetime']
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
+    
+    # Преобразуем lesson_datetime в UTC если нужно
+    if lesson_datetime.tzinfo is None:
+        lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+    else:
+        lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+    
     time_until_lesson = lesson_datetime - current_time
     minutes_until = time_until_lesson.total_seconds() / 60
     
@@ -156,7 +174,14 @@ def is_lesson_active(lesson_type: str) -> bool:
     
     # Проверяем, не прошло ли время урока
     lesson_datetime = lesson_data['datetime']
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
+    
+    # Преобразуем lesson_datetime в UTC если нужно
+    if lesson_datetime.tzinfo is None:
+        lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+    else:
+        lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+    
     # Урок считается активным, если он еще не начался или идет сейчас (+ 2 часа на проведение)
     lesson_end_time = lesson_datetime + timedelta(hours=2)
     
@@ -173,7 +198,18 @@ def get_notification_status() -> dict:
     for lesson_type, lesson_data in active_lessons.items():
         lesson_datetime = lesson_data['datetime']
         notification_time = lesson_datetime - timedelta(minutes=15)
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
+        
+        # Преобразуем lesson_datetime и notification_time в UTC если нужно
+        if lesson_datetime.tzinfo is None:
+            lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+        else:
+            lesson_datetime = lesson_datetime.astimezone(timezone.utc)
+        
+        if notification_time.tzinfo is None:
+            notification_time = notification_time.replace(tzinfo=timezone.utc)
+        else:
+            notification_time = notification_time.astimezone(timezone.utc)
         
         time_until_notification = (notification_time - current_time).total_seconds() / 60
         time_until_lesson = (lesson_datetime - current_time).total_seconds() / 60

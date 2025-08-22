@@ -8,11 +8,18 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 
 ## Commands
 
-- **Run the bot**: `python bot.py` or `./run.sh`
-- **Install dependencies**: `pip install -r requirements.txt` (includes PyYAML for data files)
-- **Setup configuration**: Set environment variables (see Configuration Structure below)
+- **Setup virtual environment**: 
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate  # On macOS/Linux
+  # or
+  venv\Scripts\activate  # On Windows
+  ```
+- **Install dependencies**: `pip install -r requirements.txt` (Python 3.11+ required)
+- **Run the bot**: `source venv/bin/activate && python bot.py`
 - **Setup database**: `docker-compose up -d` for local PostgreSQL
-- **Populate courses**: Courses are now loaded from `data/courses.yaml`
+- **Test database connection**: `source venv/bin/activate && python -c "from db.base import test_connection; test_connection()"`
+- **Configuration**: Create `.env` file with required variables (see Configuration Structure below)
 
 ## Architecture
 
@@ -72,15 +79,21 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
   - Unique ID for callback routing
   - lesson_type (key) for database operations
   - Full description including date, time, and links
-  - Scheduled datetime in ISO format for automatic notifications
+  - Scheduled datetime in ISO format with timezone (e.g., "2025-08-25T21:00:00+03:00")
   - Custom reminder_text for notifications
+  - is_active flag to enable/disable lessons
+- **Automatic filtering**: Lessons are automatically hidden after their time + 2-hour grace period
 - **Database structure**: `free_lesson_registrations` table with `lesson_type` field
-- **Registration flow**: Users can register for multiple different lesson types
+- **Registration flow**: 
+  - Users can register for multiple different lesson types
+  - Registration blocked for lessons that have passed their grace period
+  - Shows "workshop already passed" message for expired lessons
 - **Notification system**: Automated reminders sent 15 minutes before each lesson
 - **Helper functions** in `utils/lessons.py`:
   - `get_lesson_by_id(id)` - returns lesson_type and lesson_data
-  - `get_active_lessons()` - returns dict of active lessons only  
+  - `get_active_lessons()` - returns only active lessons that haven't passed (considers 2-hour grace period)
   - `get_lesson_by_type(lesson_type)` - returns lesson_data by lesson_type
+  - `reload_lessons()` - clears cache and reloads from YAML
 - **Admin functions**: 
   - View registration stats by lesson type
   - Test notifications for specific lessons
@@ -95,6 +108,8 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 - Referral system with flexible discount coupons
 - Admin notifications use HTML parse mode for better formatting
 - No webhook usage - polling mode only for simplicity
+- Timezone-aware datetime handling for lessons (UTC internally, display in local time)
+- Automatic lesson expiration with configurable grace period
 
 ### Configuration Structure
 
@@ -128,29 +143,48 @@ When modifying the bot:
 
 - **Free lesson changes**:
   - Edit lesson information in `data/lessons.yaml`
-  - Use ISO datetime format: "2025-09-02T21:00:00"
-  - Helper functions in `utils/lessons.py` handle loading and caching
+  - Use ISO datetime format with timezone: "2025-09-02T21:00:00+03:00"
+  - Set `is_active: false` to manually disable a lesson
+  - Lessons automatically hide 2 hours after their scheduled time
+  - Helper functions in `utils/lessons.py` handle loading, caching, and time filtering
 
 - **Text message changes**:
   - Edit user-facing texts in `locales/ru.py`
   - Use `get_text(category, key, **kwargs)` function for formatted texts
 
-### Free Lesson Management
+### Common Development Tasks
 
 - **Adding new free lessons**:
-  - Add new entry to `data/lessons.yaml` with unique lesson_type key
-  - Include: id, title, button_text, description (with full info), datetime (ISO format), is_active, reminder_text
-  - The lesson_type key becomes the database identifier
-  - Use `utils/lessons.py` functions to reload cached data: `reload_lessons()`
-- **Notification system**:
-  - Notifications scheduled automatically at bot startup for all active lessons
-  - Sent exactly 15 minutes before lesson datetime
-  - Uses `asyncio.create_task()` for precise timing
-  - No force_send on deployment - only scheduled notifications
-- **Database operations**:
-  - Use lesson_type to filter registrations: `get_registrations_by_type(lesson_type)`
-  - Mark notifications sent: `mark_notification_sent(registration_id)`
-  - Check user registration: `is_user_registered_for_lesson_type(user_id, lesson_type)`
+  ```yaml
+  # In data/lessons.yaml
+  new_lesson:
+    id: 4  # Unique ID
+    title: "New Workshop"
+    button_text: "Register for Workshop"
+    description: "Full description..."
+    datetime: "2025-09-10T19:00:00+03:00"  # With timezone
+    is_active: true
+    reminder_text: "Workshop starts in 15 minutes!"
+  ```
+  Then reload cache: `from utils.lessons import reload_lessons; reload_lessons()`
+
+- **Testing payment flow locally**:
+  1. Start bot with test credentials
+  2. Send `/start` to initiate booking
+  3. Upload any image as payment receipt
+  4. Check admin chat for approval buttons
+  5. Click approve to complete flow
+
+- **Checking event logs**:
+  ```python
+  from db.events import get_recent_events
+  events = get_recent_events(limit=50)
+  ```
+
+- **Managing lesson visibility**:
+  - Set `is_active: false` to hide immediately
+  - Lessons auto-hide 2 hours after `datetime`
+  - Check active lessons: `from utils.lessons import get_active_lessons`
 
 ### Deployment
 
@@ -164,4 +198,3 @@ When modifying the bot:
   - No immediate notifications sent on deployment
   - Uses precise timing based on lesson datetime minus 15 minutes
   - Logs all scheduling activities for monitoring
-- запускай локально питон только внутри виртуального окружения
