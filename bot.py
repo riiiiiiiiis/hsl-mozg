@@ -31,11 +31,6 @@ def main() -> None:
         setup_database()
         logger.info("Database setup was successful.")
         
-        # Автообновление курсов при каждом деплое
-        from db_management.populate_initial_course import main as update_courses
-        update_courses()
-        logger.info("Courses updated successfully.")
-        
     except Exception as e:
         logger.critical(f"FATAL: Database setup failed. Bot cannot start. Error: {e}")
         return  # Не запускаем бота, если база не готова

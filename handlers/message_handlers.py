@@ -4,20 +4,74 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 import config
-import constants
+from handlers.callbacks import *
+from locales.ru import get_text
 from utils import escape_markdown_v2, get_user_identification, get_course_flow_info
+from utils.courses import get_course_by_id
+from utils.lessons import get_lesson_by_type
 from db import bookings as db_bookings
 from db import events as db_events
 from db import free_lessons as db_free_lessons
 
 logger = logging.getLogger(__name__)
 
-def get_start_date_for_course(course_id):
-    """Get start date text for a course from constants."""
-    for course in constants.COURSES:
-        if course['id'] == course_id:
-            return course.get('start_date_text', 'дата не указана')
-    return 'дата не указана'
+
+def _build_admin_notification_caption(user, booking_record, message_type, status_text=None):
+    """
+    Строит caption для уведомления админа
+    
+    Args:
+        user: Telegram User объект
+        booking_record: Запись о бронировании из БД
+        message_type: Тип сообщения ('photo_check', 'student_response', 'alternative_payment')
+        status_text: Текст статуса (необязательный)
+    
+    Returns:
+        str: Готовый caption для админа
+    """
+    from utils import get_user_identification, get_course_flow_info, escape_markdown_v2
+    from utils.courses import get_course_by_id
+    
+    booking_id = booking_record['id']
+    course_name = booking_record.get('course_name', "Неизвестный курс")
+    course_stream = booking_record.get('course_stream', '4th_stream')
+    course_id = booking_record.get('course_id')
+    
+    # Get start date and format course flow info
+    course = get_course_by_id(course_id) if course_id else None
+    start_date_text = course.get('start_date_text', 'дата не указана') if course else 'дата не указана'
+    course_flow_info = get_course_flow_info(course_stream, start_date_text)
+    
+    # Enhanced user identification
+    user_identification = get_user_identification({
+        'username': user.username,
+        'first_name': user.first_name,
+        'user_id': user.id
+    })
+    
+    # Message-specific header
+    if message_type == 'photo_check':
+        header = "🧾 *Новый чек для проверки\\!*"
+    elif message_type == 'student_response':
+        header = "💬 *Ответ студента*"
+    elif message_type == 'alternative_payment':
+        header = "📩 *Альтернативное подтверждение оплаты\\!*"
+    else:
+        header = "📨 *Сообщение от студента*"
+    
+    caption = (
+        f"{header}\\n"
+        f"Пользователь: {escape_markdown_v2(user_identification)} \\(ID: `{user.id}`\\)\\n"
+        f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\\n"
+        f"Курс: *{escape_markdown_v2(course_name)}*\\n"
+        f"Поток: *{escape_markdown_v2(course_flow_info)}*"
+    )
+    
+    if status_text:
+        caption += f"\\nСтатус: {escape_markdown_v2(status_text)}"
+    
+    return caption
+
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photo uploads for payment confirmation."""
@@ -41,17 +95,6 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     course_name = booking_record['course_name']
     course_stream = booking_record.get('course_stream', '4th_stream')
     
-    # Get course ID for start date lookup
-    course_id = None
-    for course in constants.COURSES:
-        if course['name'] == course_name:
-            course_id = course['id']
-            break
-    
-    # Get start date and format course flow info
-    start_date_text = get_start_date_for_course(course_id) if course_id else 'дата не указана'
-    course_flow_info = get_course_flow_info(course_stream, start_date_text)
-
     if not db_bookings.update_booking_status(booking_id, 1):
         await update.message.reply_text("Произошла ошибка при обновлении статуса заявки.")
         return
@@ -69,20 +112,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("TARGET_CHAT_ID is not set. Cannot forward photo to admin.")
         return
 
-    # Enhanced user identification
-    user_identification = get_user_identification({
-        'username': user.username,
-        'first_name': user.first_name,
-        'user_id': user.id
-    })
-
-    caption_for_admin = (
-        f"🧾 *Новый чек для проверки\!*\n"
-        f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
-        f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
-        f"Курс: *{escape_markdown_v2(course_name)}*\n"
-        f"Поток: *{escape_markdown_v2(course_flow_info)}*"
-    )
+    caption_for_admin = _build_admin_notification_caption(user, booking_record, 'photo_check')
 
     forwarded_message = await context.bot.forward_message(
         chat_id=config.TARGET_CHAT_ID,
@@ -93,7 +123,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_keyboard = [[
         InlineKeyboardButton(
             f"✅ Одобрить ({booking_id})",
-            callback_data=f"{constants.CALLBACK_ADMIN_APPROVE_PAYMENT}{user.id}_{booking_id}"
+            callback_data=f"{CALLBACK_ADMIN_APPROVE_PAYMENT}{user.id}_{booking_id}"
         )
     ]]
     await context.bot.send_message(
@@ -125,10 +155,6 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     booking_status = booking_record['status']
     course_stream = booking_record.get('course_stream', '4th_stream')
     course_name = booking_record.get('course_name', "Неизвестный курс")
-    
-    # Get start date and format course flow info
-    start_date_text = get_start_date_for_course(course_id)
-    course_flow_info = get_course_flow_info(course_stream, start_date_text)
     
     # Log the event with appropriate type based on booking status
     event_type = 'student_response' if booking_status == 2 else 'alternative_payment_proof'
@@ -179,24 +205,10 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message_id=update.message.message_id
     )
     
-    # Enhanced user identification
-    user_identification = get_user_identification({
-        'username': user.username,
-        'first_name': user.first_name,
-        'user_id': user.id
-    })
-
     # Send admin notification with different caption based on status
     if booking_status == 2:
         # Student response after approval
-        caption_for_admin = (
-            f"💬 *Ответ студента*\n"
-            f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
-            f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
-            f"Курс: *{escape_markdown_v2(course_name)}*\n"
-            f"Поток: *{escape_markdown_v2(course_flow_info)}*\n"
-            f"Статус: ✅ Оплачено"
-        )
+        caption_for_admin = _build_admin_notification_caption(user, booking_record, 'student_response', '✅ Оплачено')
         # No approve button for already approved bookings
         await context.bot.send_message(
             chat_id=config.TARGET_CHAT_ID,
@@ -207,19 +219,12 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         # Payment confirmation or alternative proof
         status_text = "⏳ Ожидает проверки" if booking_status == 1 else "📝 Новая заявка"
-        caption_for_admin = (
-            f"📩 *Альтернативное подтверждение оплаты\!*\n"
-            f"Пользователь: {escape_markdown_v2(user_identification)} \(ID: `{user.id}`\)\n"
-            f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\n"
-            f"Курс: *{escape_markdown_v2(course_name)}*\n"
-            f"Поток: *{escape_markdown_v2(course_flow_info)}*\n"
-            f"Статус: {escape_markdown_v2(status_text)}"
-        )
+        caption_for_admin = _build_admin_notification_caption(user, booking_record, 'alternative_payment', status_text)
         
         admin_keyboard = [[
             InlineKeyboardButton(
                 f"✅ Одобрить ({booking_id})",
-                callback_data=f"{constants.CALLBACK_ADMIN_APPROVE_PAYMENT}{user.id}_{booking_id}"
+                callback_data=f"{CALLBACK_ADMIN_APPROVE_PAYMENT}{user.id}_{booking_id}"
             )
         ]]
         
@@ -248,14 +253,14 @@ async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Валидируем email
     if not db_free_lessons.validate_email(email):
         await update.message.reply_text(
-            constants.FREE_LESSON_EMAIL_INVALID,
+            get_text("FREE_LESSON", "EMAIL_INVALID"),
             parse_mode='HTML'
         )
         return
     
     # Получаем lesson_type из context или используем fallback
     lesson_type = context.user_data.get('pending_lesson_type', 'cursor_lesson')
-    lesson_data = constants.get_lesson_by_type(lesson_type)
+    lesson_data = get_lesson_by_type(lesson_type)
     
     # Создаём регистрацию с указанием lesson_type
     registration_id = db_free_lessons.create_free_lesson_registration(
@@ -287,7 +292,7 @@ async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             date_info = 'информация о дате будет отправлена дополнительно'
         
-        success_message = constants.FREE_LESSON_REGISTRATION_SUCCESS.format(
+        success_message = get_text("FREE_LESSON", "REGISTRATION_SUCCESS").format(
             date=date_info,
             email=email
         )

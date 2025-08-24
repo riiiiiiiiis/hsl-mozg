@@ -115,6 +115,16 @@ def get_lesson_by_type(lesson_type: str) -> Optional[Dict]:
     lessons = load_lessons()
     return lessons.get(lesson_type)
 
+def get_all_lesson_types() -> list:
+    """
+    Получить все доступные типы уроков
+    
+    Returns:
+        Список всех lesson_type (ключей) из YAML файла
+    """
+    lessons = load_lessons()
+    return list(lessons.keys())
+
 def reload_lessons():
     """
     Перезагрузить уроки из файла (сбросить кэш)

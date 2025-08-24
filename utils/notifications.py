@@ -3,7 +3,8 @@ import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
 from telegram.ext import Application
-import constants
+from locales.ru import get_text
+from utils.lessons import get_active_lessons, get_lesson_by_type
 from db import free_lessons as db_free_lessons
 from db import events as db_events
 
@@ -14,7 +15,7 @@ async def schedule_all_lesson_notifications(application: Application):
     Планирует уведомления для всех активных уроков при старте бота.
     Не использует force_send - только точное планирование по времени.
     """
-    active_lessons = constants.get_active_lessons()
+    active_lessons = get_active_lessons()
     
     if not active_lessons:
         logger.info("No active lessons found for notification scheduling")
@@ -142,7 +143,7 @@ def get_time_until_lesson(lesson_type: str) -> float:
     Возвращает время до начала урока в минутах для конкретного типа урока.
     Возвращает None, если урок не найден или уже прошел.
     """
-    lesson_data = constants.get_lesson_by_type(lesson_type)
+    lesson_data = get_lesson_by_type(lesson_type)
     if not lesson_data:
         return None
     
@@ -164,7 +165,7 @@ def is_lesson_active(lesson_type: str) -> bool:
     """
     Проверяет, активен ли урок (не прошел ли он уже).
     """
-    lesson_data = constants.get_lesson_by_type(lesson_type)
+    lesson_data = get_lesson_by_type(lesson_type)
     if not lesson_data:
         return False
     
@@ -193,7 +194,7 @@ def get_notification_status() -> dict:
     Полезно для мониторинга и отладки.
     """
     status = {}
-    active_lessons = constants.get_active_lessons()
+    active_lessons = get_active_lessons()
     
     for lesson_type, lesson_data in active_lessons.items():
         lesson_datetime = lesson_data['datetime']
@@ -233,7 +234,7 @@ async def send_test_notification(application: Application, lesson_type: str, use
     Отправляет тестовое уведомление для конкретного урока.
     Если user_id указан, отправляет только этому пользователю.
     """
-    lesson_data = constants.get_lesson_by_type(lesson_type)
+    lesson_data = get_lesson_by_type(lesson_type)
     if not lesson_data:
         logger.error(f"Lesson type {lesson_type} not found")
         return False

@@ -37,6 +37,13 @@ courses:
     price_usd_cents: 20000  # Автоматически вычисляется если не указано
     is_active: true
     start_date_text: "1 сентября"
+    confirmation:
+      stream_title: "Поток BOCTOK"
+      dates_text: "13, 20, 27 августа и 3 сентября"
+      first_live_calendar_link: "https://calendar.app.google/AcavEBkN1ZTMsQ1q6"
+      group_invite_link: "https://t.me/+oxpLHOBteD41ZThi"
+      support_contact: "@serejaris"
+      approval_photo_file_id: "AgACAgIAAxkBAAE5FuNolBevwD24uQRSmq28gsyV6FWTnQACdvsxG81-oUhX08cmOnTLeQEAAwIAA3kAAzYE"
   
   - id: 2
     name: "Вайбкодинг PRO"

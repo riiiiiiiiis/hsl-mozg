@@ -3,9 +3,12 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
-import constants
+import config
+from handlers.callbacks import *
+from locales.ru import get_text
 from utils import escape_markdown_v2
-from db import courses as db_courses
+from utils.lessons import get_active_lessons
+from utils.courses import get_active_courses
 from db import events as db_events
 from db import referrals as db_referrals
 
@@ -24,8 +27,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.args and len(context.args) > 0:
         start_param = context.args[0]
-        if start_param.startswith(constants.REFERRAL_START_PARAMETER):
-            referral_code = start_param[len(constants.REFERRAL_START_PARAMETER):]
+        if start_param.startswith(config.REFERRAL_START_PARAMETER):
+            referral_code = start_param[len(config.REFERRAL_START_PARAMETER):]
             coupon, status = db_referrals.validate_referral_code(referral_code, user.id)
 
             logger.info(f"Referral attempt by user {user.id} with code {referral_code}. Status: {status}")
@@ -43,23 +46,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 
                 remaining = coupon['max_activations'] - coupon['current_activations']
-                discount_msg = constants.REFERRAL_APPLIED_MESSAGE.format(discount=coupon['discount_percent'])
+                discount_msg = get_text("REFERRAL", "APPLIED").format(discount=coupon['discount_percent'])
                 if coupon['name']:
                     discount_msg += f"\n🏷️ Купон: {coupon['name']}"
                 discount_msg += f"\n📊 Осталось активаций: {remaining}"
                 
                 await update.message.reply_text(discount_msg)
             else:
-                await update.message.reply_text(constants.REFERRAL_EXPIRED_MESSAGE)
+                await update.message.reply_text(get_text("REFERRAL", "EXPIRED"))
 
-    active_courses = db_courses.get_active_courses()
+    active_courses = get_active_courses()
     
     keyboard = []
     
     # Добавляем кнопки бесплатных уроков, если они активны
-    active_lessons = constants.get_active_lessons()
+    active_lessons = get_active_lessons()
     for lesson_type, lesson_data in active_lessons.items():
-        callback_data = f"{constants.CALLBACK_FREE_LESSON_PREFIX}{lesson_data['id']}"
+        callback_data = f"{CALLBACK_FREE_LESSON_PREFIX}{lesson_data['id']}"
         keyboard.append([InlineKeyboardButton(
             lesson_data['button_text'], 
             callback_data=callback_data
@@ -68,7 +71,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Добавляем кнопки курсов
     if active_courses:
         for course in active_courses:
-            callback_data = f"{constants.CALLBACK_SELECT_COURSE_PREFIX}{course['id']}"
+            callback_data = f"{CALLBACK_SELECT_COURSE_PREFIX}{course['id']}"
             keyboard.append([InlineKeyboardButton(course['button_text'], callback_data=callback_data)])
         
         message_text = "Привет! Здесь учимся создавать сайты, ботов и веб-приложения через диалог с нейросетями.\n\n" \
@@ -100,7 +103,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to create a new referral coupon."""
     user = update.message.from_user
-    if constants.REFERRAL_ADMIN_IDS and user.id not in constants.REFERRAL_ADMIN_IDS:
+    if config.REFERRAL_ADMIN_IDS and user.id not in config.REFERRAL_ADMIN_IDS:
         await update.message.reply_text("❌ У вас нет прав для создания реферальных купонов.")
         return
 
@@ -112,13 +115,13 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
         discount = int(context.args[0])
         activations = int(context.args[1])
 
-        if discount not in constants.REFERRAL_DISCOUNTS:
+        if discount not in config.REFERRAL_DISCOUNTS:
             await update.message.reply_text("❌ Недопустимый процент скидки.")
             return
 
         code = db_referrals.generate_and_save_referral_code(discount, activations, user.id)
         bot_username = context.bot.username
-        link = f"https://t.me/{bot_username}?start={constants.REFERRAL_START_PARAMETER}{code}"
+        link = f"https://t.me/{bot_username}?start={config.REFERRAL_START_PARAMETER}{code}"
 
         # Логируем создание реферального кода
         db_events.log_event(
@@ -151,7 +154,7 @@ async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_T
         username=user.username,
         first_name=user.first_name
     )
-    if constants.REFERRAL_ADMIN_IDS and user.id not in constants.REFERRAL_ADMIN_IDS:
+    if config.REFERRAL_ADMIN_IDS and user.id not in config.REFERRAL_ADMIN_IDS:
         await update.message.reply_text("❌ У вас нет прав для просмотра статистики.")
         return
 

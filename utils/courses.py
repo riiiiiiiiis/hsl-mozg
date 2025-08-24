@@ -5,6 +5,7 @@
 import os
 import yaml
 from typing import List, Optional, Dict
+from utils.course_validation import validate_course_id
 
 # Путь к файлу с данными курсов
 COURSES_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'courses.yaml')
@@ -55,19 +56,24 @@ def get_active_courses() -> List[Dict]:
     courses = load_courses()
     return [c for c in courses if c.get('is_active', True)]
 
-def get_course_by_id(course_id: int) -> Optional[Dict]:
+def get_course_by_id(course_id) -> Optional[Dict]:
     """
-    Получить курс по ID
+    Получить курс по ID с валидацией
     
     Args:
-        course_id: ID курса
+        course_id: ID курса (int или str)
     
     Returns:
         Данные курса или None
     """
+    # Validate course ID
+    validated_id = validate_course_id(course_id)
+    if validated_id is None:
+        return None
+    
     courses = load_courses()
     for course in courses:
-        if course.get('id') == course_id:
+        if course.get('id') == validated_id:
             return course
     return None
 

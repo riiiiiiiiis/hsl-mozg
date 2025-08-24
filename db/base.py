@@ -3,7 +3,6 @@ import logging
 import psycopg2
 from psycopg2.extras import DictCursor
 import config
-import constants
 
 logger = logging.getLogger(__name__)
 
@@ -114,20 +113,7 @@ def setup_database():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            # 1. Таблица курсов
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS courses (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    price_usd_cents INTEGER NOT NULL DEFAULT 0,
-                    button_text VARCHAR(100) NOT NULL,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    start_date_text VARCHAR(100)
-                );
-            """)
-
-            # 2. Таблица бронирований
+            # 1. Таблица бронирований
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bookings (
                     id SERIAL PRIMARY KEY,
