@@ -2,8 +2,10 @@
 import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application
 from locales.ru import get_text
+from handlers.callbacks import CALLBACK_LESSON_LINK_PREFIX
 from utils.lessons import get_active_lessons, get_lesson_by_type
 from db import free_lessons as db_free_lessons
 from db import events as db_events
@@ -101,17 +103,26 @@ async def send_notifications_for_lesson(application: Application, lesson_type: s
         description=lesson_data['description']
     )
     
+    # Создаем inline keyboard с кнопкой для перехода к уроку
+    keyboard = None
+    if lesson_data.get('meeting_url'):
+        callback_data = f"{CALLBACK_LESSON_LINK_PREFIX}{lesson_type}"
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔗 Присоединиться к уроку", callback_data=callback_data)
+        ]])
+    
     successful_sends = 0
     failed_sends = 0
     
     for registration in pending_registrations:
         try:
-            # Отправляем уведомление
+            # Отправляем уведомление с inline keyboard
             await application.bot.send_message(
                 chat_id=registration['user_id'],
                 text=reminder_text,
                 parse_mode='HTML',
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=keyboard
             )
             
             # Помечаем уведомление как отправленное

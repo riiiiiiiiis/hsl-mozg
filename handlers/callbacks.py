@@ -17,3 +17,4 @@ CALLBACK_ADMIN_REJECT_PAYMENT = "admin_reject_"
 # Callback для бесплатных уроков
 CALLBACK_FREE_LESSON_PREFIX = "free_lesson_"
 CALLBACK_FREE_LESSON_REGISTER_PREFIX = "free_lesson_register_"
+CALLBACK_LESSON_LINK_PREFIX = "lesson_link_"

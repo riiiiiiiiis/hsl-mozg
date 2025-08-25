@@ -7,7 +7,7 @@ import config
 from handlers.callbacks import *
 from locales.ru import get_text
 from utils import escape_markdown_v2, get_approval_timestamp
-from utils.lessons import get_lesson_by_id
+from utils.lessons import get_lesson_by_id, get_lesson_by_type
 from utils.courses import get_course_by_id
 from db import bookings as db_bookings
 from db import events as db_events
@@ -40,6 +40,8 @@ async def main_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_free_lesson_register_by_id(query, context)
     elif data.startswith(CALLBACK_FREE_LESSON_PREFIX):
         await handle_free_lesson_by_id(query, context)
+    elif data.startswith(CALLBACK_LESSON_LINK_PREFIX):
+        await handle_lesson_link_click(query, context)
     else:
         logger.warning(f"Unhandled callback data: {data} from user {user.id}")
         # Логируем неизвестные callback'и
@@ -404,3 +406,54 @@ async def handle_free_lesson_register_by_id(query, context):
     )
     
     await query.edit_message_text(get_text("FREE_LESSON", "EMAIL_REQUEST"), parse_mode='HTML')
+
+
+async def handle_lesson_link_click(query, context):
+    """Handles clicks on lesson meeting link buttons"""
+    try:
+        lesson_type = query.data.replace(CALLBACK_LESSON_LINK_PREFIX, '')
+        logger.info(f"Lesson link clicked for lesson_type: {lesson_type}")
+    except Exception as e:
+        logger.error(f"Failed to parse lesson_type from callback '{query.data}': {e}")
+        await query.answer("Ошибка: неверные данные")
+        return
+    
+    lesson_data = get_lesson_by_type(lesson_type)
+    if not lesson_data:
+        logger.error(f"Lesson data not found for lesson_type: {lesson_type}")
+        await query.answer("Урок не найден")
+        return
+    
+    user_id = context.user_data['user_id']
+    
+    # Логируем клик по ссылке урока для отслеживания
+    db_events.log_event(
+        user_id,
+        'lesson_link_clicked',
+        details={
+            'lesson_type': lesson_type,
+            'lesson_title': lesson_data.get('title', 'Unknown')
+        },
+        username=context.user_data['username'],
+        first_name=context.user_data['first_name']
+    )
+    
+    # Получаем ссылку на встречу
+    meeting_url = lesson_data.get('meeting_url')
+    if not meeting_url:
+        await query.answer("Ссылка на урок пока недоступна")
+        return
+    
+    # Отвечаем пользователю с подтверждением и ссылкой
+    await query.answer(f"🔗 Переходим к уроку: {lesson_data.get('title', 'Урок')}")
+    
+    # Отправляем сообщение с ссылкой
+    message_text = f"🎯 <b>Переход к уроку:</b> {lesson_data.get('title', 'Урок')}\n\n" \
+                   f"👉 <a href='{meeting_url}'>Присоединиться к Google Meet</a>\n\n" \
+                   f"Увидимся на уроке! 👋"
+    
+    await query.message.reply_text(
+        message_text,
+        parse_mode='HTML',
+        disable_web_page_preview=False
+    )
