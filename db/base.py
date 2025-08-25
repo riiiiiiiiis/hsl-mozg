@@ -131,7 +131,7 @@ def setup_database():
 
             # 3. Таблица реферальных купонов
             cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {constants.REFERRAL_TABLE_NAME} (
+                CREATE TABLE IF NOT EXISTS {config.REFERRAL_TABLE_NAME} (
                     id SERIAL PRIMARY KEY,
                     code TEXT UNIQUE NOT NULL,
                     name TEXT,
@@ -146,9 +146,9 @@ def setup_database():
 
             # 4. Таблица использования рефералов
             cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {constants.REFERRAL_USAGE_TABLE_NAME} (
+                CREATE TABLE IF NOT EXISTS {config.REFERRAL_USAGE_TABLE_NAME} (
                     id SERIAL PRIMARY KEY,
-                    coupon_id INTEGER NOT NULL REFERENCES {constants.REFERRAL_TABLE_NAME}(id),
+                    coupon_id INTEGER NOT NULL REFERENCES {config.REFERRAL_TABLE_NAME}(id),
                     user_id BIGINT NOT NULL,
                     booking_id INTEGER REFERENCES bookings(id),
                     used_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

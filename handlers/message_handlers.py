@@ -51,17 +51,17 @@ def _build_admin_notification_caption(user, booking_record, message_type, status
     
     # Message-specific header
     if message_type == 'photo_check':
-        header = "🧾 *Новый чек для проверки\\!*"
+        header = r"🧾 *Новый чек для проверки\\!*"
     elif message_type == 'student_response':
         header = "💬 *Ответ студента*"
     elif message_type == 'alternative_payment':
-        header = "📩 *Альтернативное подтверждение оплаты\\!*"
+        header = r"📩 *Альтернативное подтверждение оплаты\\!*"
     else:
         header = "📨 *Сообщение от студента*"
     
     caption = (
         f"{header}\\n"
-        f"Пользователь: {escape_markdown_v2(user_identification)} \\(ID: `{user.id}`\\)\\n"
+        rf"Пользователь: {escape_markdown_v2(user_identification)} \\(ID: `{user.id}`\\)\\n"
         f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\\n"
         f"Курс: *{escape_markdown_v2(course_name)}*\\n"
         f"Поток: *{escape_markdown_v2(course_flow_info)}*"
@@ -102,9 +102,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Booking {booking_id} for user {user.id} updated to 'payment uploaded' status (1).")
 
     await update.message.reply_text(
-        f"🙏 Спасибо, {escape_markdown_v2(user.first_name)}\! Ваше фото для заявки №*{escape_markdown_v2(str(booking_id))}* "
-        f"\(курс '*{escape_markdown_v2(course_name)}*' \) получено\.\n"
-        "Оплата проверяется\. Мы сообщим вам о результате\.",
+        rf"🙏 Спасибо, {escape_markdown_v2(user.first_name)}\! Ваше фото для заявки №*{escape_markdown_v2(str(booking_id))}* "
+        rf"\(курс '*{escape_markdown_v2(course_name)}*' \) получено\.\n"
+        r"Оплата проверяется\. Мы сообщим вам о результате\.",
         parse_mode=ParseMode.MARKDOWN_V2
     )
 
@@ -182,15 +182,15 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Notify user about payment check
         await update.message.reply_text(
-            f"📨 Сообщение получено для заявки №*{escape_markdown_v2(str(booking_id))}* "
-            f"\(курс '*{escape_markdown_v2(course_name)}*'\)\."
-            "\nМы проверим вашу оплату и сообщим о результате\.",
+            rf"📨 Сообщение получено для заявки №*{escape_markdown_v2(str(booking_id))}* "
+            rf"\(курс '*{escape_markdown_v2(course_name)}*'\)\."
+            r"\nМы проверим вашу оплату и сообщим о результате\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
     elif booking_status == 2:
         # User is already approved, just acknowledge their response
         await update.message.reply_text(
-            f"👍 Спасибо за ответ\\! Ваше сообщение получено\\.",
+            rf"👍 Спасибо за ответ\\! Ваше сообщение получено\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
     

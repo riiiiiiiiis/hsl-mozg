@@ -31,7 +31,7 @@ python bot.py
 hsl-mozg/
 ├── bot.py                     # Точка входа
 ├── config.py                  # Конфигурация через env переменные
-├── constants.py               # Обратная совместимость
+├── constants.py               # УДАЛЕНО (устаревший)
 │
 ├── data/                      # Данные в YAML
 │   ├── courses.yaml           # Курсы
@@ -146,8 +146,8 @@ def get_text(category, key, **kwargs):
 
 **Таблицы:**
 - `bookings` - Брони курсов
-- `referral_coupons` - Реферальные купоны
-- `referral_usage` - История использования
+- `<REFERRAL_TABLE_NAME>` - Реферальные купоны (см. config)
+- `<REFERRAL_USAGE_TABLE_NAME>` - История использования (см. config)
 - `events` - Аналитика
 - `free_lesson_registrations` - Регистрации на уроки
 

@@ -73,13 +73,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for course in active_courses:
             callback_data = f"{CALLBACK_SELECT_COURSE_PREFIX}{course['id']}"
             keyboard.append([InlineKeyboardButton(course['button_text'], callback_data=callback_data)])
-        
-        message_text = "Привет! Здесь учимся создавать сайты, ботов и веб-приложения через диалог с нейросетями.\n\n" \
-                       "Хотите сначала попробовать — приходите на воркшопы (кнопки ниже).\n" \
-                       "Готовы к системному обучению — выбирайте курс: «Основы» (с нуля, старт 1 сент.) или «PRO» (для тех, кто уже в теме, старт 15 сент.)."
+        message_text = get_text("START", "WELCOME_WITH_COURSES")
     else:
-        message_text = "Привет! Здесь учимся создавать сайты, ботов и веб-приложения через диалог с нейросетями.\n\n" \
-                       "Хотите сначала попробовать — приходите на воркшопы (кнопки ниже)."
+        message_text = get_text("START", "WELCOME_NO_COURSES")
 
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode='HTML', disable_web_page_preview=True)
@@ -96,19 +92,17 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data.clear()
     logger.info(f"User {user.id} reset their session.")
-    await update.message.reply_text(
-        "🔄 Ваша сессия сброшена. Вы можете начать заново, используя /start."
-    )
+    await update.message.reply_text(get_text("RESET", "SESSION_CLEARED"))
 
 async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to create a new referral coupon."""
     user = update.message.from_user
     if config.REFERRAL_ADMIN_IDS and user.id not in config.REFERRAL_ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет прав для создания реферальных купонов.")
+        await update.message.reply_text(get_text("REFERRAL_ADMIN", "NO_RIGHTS"))
         return
 
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text("Использование: /create_referral <процент> <активации>")
+        await update.message.reply_text(get_text("REFERRAL_ADMIN", "USAGE_HINT"))
         return
 
     try:
@@ -116,7 +110,7 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
         activations = int(context.args[1])
 
         if discount not in config.REFERRAL_DISCOUNTS:
-            await update.message.reply_text("❌ Недопустимый процент скидки.")
+            await update.message.reply_text(get_text("REFERRAL_ADMIN", "INVALID_FORMAT"))
             return
 
         code = db_referrals.generate_and_save_referral_code(discount, activations, user.id)
@@ -132,17 +126,20 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
             first_name=user.first_name
         )
         logger.info(f"Admin {user.id} created a new referral code: {code}")
-        await update.message.reply_text(
-            f"✅ Купон создан\!\nКод: `{escape_markdown_v2(code)}`\n"
-            f"Скидка: {discount}%\nАктиваций: {activations}\n\n"
-            f"Ссылка: `{escape_markdown_v2(link)}`",
-            parse_mode=ParseMode.MARKDOWN_V2
+        message_text = get_text(
+            "REFERRAL_ADMIN",
+            "CREATED_OK",
+            code=escape_markdown_v2(code),
+            discount=discount,
+            activations=activations,
+            link=escape_markdown_v2(link)
         )
+        await update.message.reply_text(message_text, parse_mode=ParseMode.MARKDOWN_V2)
     except (ValueError, IndexError):
-        await update.message.reply_text("❌ Неверный формат. Пример: /create_referral 20 10")
+        await update.message.reply_text(get_text("REFERRAL_ADMIN", "INVALID_FORMAT"))
     except Exception as e:
         logger.error(f"Error creating referral code: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при создании купона.")
+        await update.message.reply_text(get_text("REFERRAL_ADMIN", "ERROR_CREATING"))
 
 async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to view referral coupon statistics."""
@@ -155,23 +152,25 @@ async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_T
         first_name=user.first_name
     )
     if config.REFERRAL_ADMIN_IDS and user.id not in config.REFERRAL_ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет прав для просмотра статистики.")
+        await update.message.reply_text(get_text("REFERRAL_STATS", "NO_RIGHTS"))
         return
 
     coupons = db_referrals.get_referral_stats()
     if not coupons:
-        await update.message.reply_text("📊 Нет созданных реферальных купонов.")
+        await update.message.reply_text(get_text("REFERRAL_STATS", "EMPTY"))
         return
 
-    message = "📊 *Статистика реферальных купонов:*\n\n"
+    lines = []
     for coupon in coupons:
         status = "✅ Активен" if coupon['is_active'] and coupon['current_activations'] < coupon['max_activations'] else "❌ Неактивен"
-        message += (
+        lines.append(
             f"{status} Код: `{escape_markdown_v2(coupon['code'])}`\n"
             f"   Скидка: {coupon['discount_percent']}%, "
-            f"Исп\.: {coupon['current_activations']}/{coupon['max_activations']}\n"
-            f"-------------------\n"
+            rf"Исп\.: {coupon['current_activations']}/{coupon['max_activations']}\n"
+            f"-------------------"
         )
+    stats_block = "\n".join(lines) + "\n"
+    message = get_text("REFERRAL_STATS", "TEMPLATE", stats_block=stats_block)
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -186,14 +185,13 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     try:
         stats = db_events.get_stats_summary()
-        message = (
-            f"📊 *Статистика*\n\n"
-            f"👤 *Пользователи:*\n"
-            f"  - Сегодня: *{stats['users_today']}*\n"
-            f"  - За 7 дней: *{stats['users_week']}*\n\n"
-            f"💰 *Продажи:*\n"
-            f"  - Новых броней сегодня: *{stats['bookings_today']}*\n"
-            f"  - Оплат за 7 дней: *{stats['confirmed_week']}*"
+        message = get_text(
+            "STATS",
+            "TEMPLATE",
+            users_today=stats['users_today'],
+            users_week=stats['users_week'],
+            bookings_today=stats['bookings_today'],
+            confirmed_week=stats['confirmed_week']
         )
         await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception as e:

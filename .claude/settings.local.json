@@ -10,7 +10,13 @@
       "mcp__railway-mcp-server__get-logs",
       "Bash(mkdir:*)",
       "Bash(pip install:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(psql:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "additionalDirectories": [
