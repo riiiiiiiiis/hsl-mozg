@@ -262,13 +262,21 @@ async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lesson_type = context.user_data.get('pending_lesson_type', 'cursor_lesson')
     lesson_data = get_lesson_by_type(lesson_type)
     
-    # Создаём регистрацию с указанием lesson_type
+    # Извлекаем дату урока из lesson_data
+    lesson_date = None
+    if lesson_data and 'datetime' in lesson_data:
+        lesson_datetime = lesson_data['datetime']
+        if lesson_datetime:
+            lesson_date = lesson_datetime.date()  # Извлекаем только дату из datetime объекта
+    
+    # Создаём регистрацию с указанием lesson_type и lesson_date
     registration_id = db_free_lessons.create_free_lesson_registration(
         user.id,
         user.username,
         user.first_name,
         email,
-        lesson_type=lesson_type
+        lesson_type=lesson_type,
+        lesson_date=lesson_date
     )
     
     if registration_id:

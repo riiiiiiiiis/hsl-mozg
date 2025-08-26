@@ -16,7 +16,18 @@
       "Bash(psql:*)",
       "Bash(grep:*)",
       "Bash(find:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(git commit:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__railway-mcp-server__list-projects",
+      "Bash(railway link:*)",
+      "Bash(cat:*)",
+      "Bash(railway status:*)",
+      "Bash(railway run:*)",
+      "Bash(railway variables:*)",
+      "Bash(railway connect:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": [],
     "additionalDirectories": [

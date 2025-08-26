@@ -198,3 +198,29 @@ When modifying the bot:
   - No immediate notifications sent on deployment
   - Uses precise timing based on lesson datetime minus 15 minutes
   - Logs all scheduling activities for monitoring
+
+## Railway Deployment Notes
+
+### Known Issues with Railway Tools
+
+**Railway MCP Timeout Issue**: 
+- Railway MCP commands (especially `get-logs`) may hang/timeout due to large log volume
+- The bot generates continuous polling logs (Telegram getUpdates every 10 seconds)
+- **Solution**: Use direct Railway CLI commands instead of Railway MCP when possible:
+  ```bash
+  railway status                    # Check project status
+  railway logs --service worker     # Get logs (may timeout with large volumes)
+  railway whoami                    # Check authentication
+  ```
+
+**Log Volume Management**:
+- Worker service generates ~6 log entries per minute (continuous Telegram polling)
+- Logs include HTTP requests to Telegram API every 10 seconds
+- For troubleshooting, use `railway logs --tail 50` to limit output
+- Consider log rotation or filtering for production monitoring
+
+### Database Access
+- Use Railway MCP `list-variables` to get DATABASE_PUBLIC_URL
+- Connect via psql: `psql "postgresql://user:pass@host:port/db"`
+- Database credentials available through Railway variables (service: Postgres)
+- Railway-db Claude Code agent available for database operations
