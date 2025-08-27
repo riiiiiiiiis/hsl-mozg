@@ -79,7 +79,7 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
   - Unique ID for callback routing
   - lesson_type (key) for database operations
   - Full description including date, time, and links
-  - Scheduled datetime in ISO format with timezone (e.g., "2025-08-25T21:00:00+03:00")
+  - Scheduled datetime in ISO format with timezone (e.g., "2025-09-04T21:00:00+03:00")
   - Custom reminder_text for notifications
   - is_active flag to enable/disable lessons
 - **Automatic filtering**: Lessons are automatically hidden after their time + 2-hour grace period
@@ -88,6 +88,8 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
   - Users can register for multiple different lesson types
   - Registration blocked for lessons that have passed their grace period
   - Shows "workshop already passed" message for expired lessons
+  - **Repeating workshops supported**: Same lesson_type with different dates creates separate registrations
+  - Database separates participants by `lesson_type` AND `lesson_date` for analytics
 - **Notification system**: Automated reminders sent 15 minutes before each lesson
 - **Helper functions** in `utils/lessons.py`:
   - `get_lesson_by_id(id)` - returns lesson_type and lesson_data
@@ -143,10 +145,11 @@ When modifying the bot:
 
 - **Free lesson changes**:
   - Edit lesson information in `data/lessons.yaml`
-  - Use ISO datetime format with timezone: "2025-09-02T21:00:00+03:00"
+  - Use ISO datetime format with timezone: "2025-09-04T21:00:00+03:00"
   - Set `is_active: false` to manually disable a lesson
   - Lessons automatically hide 2 hours after their scheduled time
   - Helper functions in `utils/lessons.py` handle loading, caching, and time filtering
+  - **For repeating workshops**: Simply update the datetime - database will separate registrations by date automatically
 
 - **Text message changes**:
   - Edit user-facing texts in `locales/ru.py`
