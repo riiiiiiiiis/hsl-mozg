@@ -90,7 +90,19 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
   - Shows "workshop already passed" message for expired lessons
   - **Repeating workshops supported**: Same lesson_type with different dates creates separate registrations
   - Database separates participants by `lesson_type` AND `lesson_date` for analytics
-- **Notification system**: Automated reminders sent 15 minutes before each lesson
+- **Notification system**: 
+  - Automated reminders sent 15 minutes before each lesson
+  - Notifications scheduled on bot startup using `asyncio.create_task()` 
+  - Only sends to users who haven't received notifications yet (`notification_sent` flag)
+  - Creates inline keyboard button if `meeting_url` field exists in lesson data
+  - Uses `utils/notifications.py` for scheduling and delivery
+  - Logs successful/failed deliveries and marks notifications as sent
+  - Events logged: `free_lesson_reminder_sent`, `lesson_link_clicked`
+- **Callback handlers** in `handlers/callback_handlers.py`:
+  - `CALLBACK_LESSON_LINK_PREFIX` ("lesson_link_") for meeting URL buttons  
+  - `handle_lesson_link_click()` processes button clicks and sends meeting links
+  - Button clicks logged as `lesson_link_clicked` events for analytics
+  - Sends separate HTML message with clickable Google Meet link
 - **Helper functions** in `utils/lessons.py`:
   - `get_lesson_by_id(id)` - returns lesson_type and lesson_data
   - `get_active_lessons()` - returns only active lessons that haven't passed (considers 2-hour grace period)
@@ -98,8 +110,9 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
   - `reload_lessons()` - clears cache and reloads from YAML
 - **Admin functions**: 
   - View registration stats by lesson type
-  - Test notifications for specific lessons
-  - Monitor notification scheduling status
+  - Test notifications for specific lessons (`send_test_notification()`)
+  - Monitor notification scheduling status (`get_notification_status()`)
+  - Check time until lesson starts (`get_time_until_lesson()`)
 
 ### Key Technical Decisions
 
@@ -155,6 +168,14 @@ When modifying the bot:
   - Edit user-facing texts in `locales/ru.py`
   - Use `get_text(category, key, **kwargs)` function for formatted texts
 
+- **Meeting URL handling**:
+  - **CRITICAL**: Meeting URLs for lessons MUST NEVER appear in reminder text messages
+  - Meeting URLs should ONLY be accessible through inline keyboard buttons
+  - Add `meeting_url` field to lesson data in `data/lessons.yaml` to enable the button
+  - Inline button "🔗 Присоединиться к уроку" appears automatically when `meeting_url` is present
+  - Button click triggers callback handler that sends separate message with clickable link
+  - `reminder_text` should end with friendly message like "Увидимся на уроке! 👋" (no URLs)
+
 ### Common Development Tasks
 
 - **Adding new free lessons**:
@@ -167,9 +188,29 @@ When modifying the bot:
     description: "Full description..."
     datetime: "2025-09-10T19:00:00+03:00"  # With timezone
     is_active: true
-    reminder_text: "Workshop starts in 15 minutes!"
+    meeting_url: "https://meet.google.com/abc-defg-hij"  # Required for inline button
+    reminder_text: |
+      ⏰ Workshop starts in 15 minutes!
+      
+      {description}
+      
+      See you at the lesson! 👋
   ```
+  **Important**: 
+  - Add `meeting_url` field to enable "🔗 Присоединиться к уроку" button
+  - DO NOT include meeting URLs in `reminder_text` - only through buttons
+  - End `reminder_text` with friendly message, no direct links
+  
   Then reload cache: `from utils.lessons import reload_lessons; reload_lessons()`
+
+- **Updating meeting URLs for existing lessons**:
+  ```yaml
+  # To add or change meeting URL
+  existing_lesson:
+    # ... other fields ...
+    meeting_url: "https://meet.google.com/new-meeting-url"  # Updates button link
+  ```
+  Bot restart required to apply changes to scheduled notifications.
 
 - **Testing payment flow locally**:
   1. Start bot with test credentials
@@ -188,6 +229,48 @@ When modifying the bot:
   - Set `is_active: false` to hide immediately
   - Lessons auto-hide 2 hours after `datetime`
   - Check active lessons: `from utils.lessons import get_active_lessons`
+
+### Testing & Debugging
+
+- **Testing notification system**:
+  ```python
+  from utils.notifications import send_test_notification, get_notification_status
+  from telegram.ext import Application
+  
+  # Send test notification to specific user
+  await send_test_notification(application, "vibecoding_lesson", user_id=123456)
+  
+  # Check notification scheduling status for all lessons
+  status = get_notification_status()
+  print(status)
+  ```
+
+- **Testing lesson link buttons**:
+  1. Register for a lesson that has `meeting_url` field
+  2. Trigger test notification manually
+  3. Click the "🔗 Присоединиться к уроку" button
+  4. Verify you get separate message with clickable Google Meet link
+  5. Check logs for `lesson_link_clicked` event
+
+- **Checking event logs**:
+  ```python
+  from db.events import get_recent_events
+  
+  # Check recent lesson-related events
+  events = get_recent_events(limit=100)
+  lesson_events = [e for e in events if 'lesson' in e['action']]
+  
+  # Check specific event types
+  reminder_events = [e for e in events if e['action'] == 'free_lesson_reminder_sent']
+  click_events = [e for e in events if e['action'] == 'lesson_link_clicked']
+  ```
+
+- **Common debugging scenarios**:
+  - **No notification button**: Check if `meeting_url` field exists in lesson YAML
+  - **Button not working**: Check `CALLBACK_LESSON_LINK_PREFIX` handler in callback_handlers.py
+  - **Wrong meeting link**: Verify `meeting_url` field value in lessons.yaml
+  - **Notification not sent**: Check bot startup logs for scheduling errors
+  - **Time zone issues**: Verify lesson `datetime` uses proper timezone format
 
 ### Deployment
 
