@@ -58,8 +58,9 @@ lessons:
     datetime: "2025-08-28T21:00:00+03:00"
     date_text: "28 августа в 21:00 по МСК"
     is_active: true
+    meeting_url: "https://meet.google.com/yys-tjrr-xdz"
     reminder_text: |
-      ⏰ Урок по вайбкодингу начинается!
+      ⏰ Урок по вайбкодингу начинается через 15 минут!
       
       {description}
       

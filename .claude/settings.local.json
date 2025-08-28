@@ -27,7 +27,10 @@
       "Bash(railway variables:*)",
       "Bash(railway connect:*)",
       "mcp__context7__resolve-library-id",
-      "mcp__context7__get-library-docs"
+      "mcp__context7__get-library-docs",
+      "mcp__railway-mcp-server__list-services",
+      "Bash(pg_isready:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "additionalDirectories": [

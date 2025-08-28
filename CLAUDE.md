@@ -207,6 +207,7 @@ When modifying the bot:
 ### Known Issues with Railway Tools
 
 **Railway MCP Timeout Issue**: 
+- **NEVER USE**: `mcp__railway-mcp-server__get-logs` - this command ALWAYS hangs/timeouts
 - Railway MCP commands (especially `get-logs`) may hang/timeout due to large log volume
 - The bot generates continuous polling logs (Telegram getUpdates every 10 seconds)
 - **Solution**: Use direct Railway CLI commands instead of Railway MCP when possible:
