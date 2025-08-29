@@ -274,16 +274,31 @@ When modifying the bot:
 
 ### Deployment
 
-- **Railway**: Uses Procfile with worker dyno type
-- **Local**: docker-compose.yml for PostgreSQL setup  
-- Course and lesson data loaded from YAML files on bot startup
+**⚠️ CRITICAL DEPLOYMENT RULES:**
+- **NEVER USE CLI DEPLOYMENT** - This crashes the database and can cause data loss
+- **ONLY DEPLOY VIA GITHUB** - Push to repository and let Railway auto-deploy
+- **NEVER use `mcp__railway-mcp-server__deploy`** - This CLI command is FORBIDDEN
+- **Always commit changes first** before any deployment
+- **Test locally** before pushing to GitHub
+
+**Deployment Process:**
+1. Test changes locally with `python bot.py`
+2. Commit changes: `git add -A && git commit -m "message"`
+3. Push to GitHub: `git push origin main`
+4. Railway auto-deploys from GitHub webhook
+5. Monitor deployment in Railway dashboard
+
+**Railway Setup:**
+- Uses Procfile with worker dyno type
+- Auto-deploy from GitHub main branch
 - Database migrations run automatically on startup
 - PyYAML dependency automatically installed via requirements.txt
-- **Free lesson notifications**: 
-  - Automatically scheduled for all active lessons on bot startup
-  - No immediate notifications sent on deployment
-  - Uses precise timing based on lesson datetime minus 15 minutes
-  - Logs all scheduling activities for monitoring
+
+**Free lesson notifications**: 
+- Automatically scheduled for all active lessons on bot startup
+- No immediate notifications sent on deployment
+- Uses precise timing based on lesson datetime minus 15 minutes
+- Logs all scheduling activities for monitoring
 
 ## Railway Deployment Notes
 
