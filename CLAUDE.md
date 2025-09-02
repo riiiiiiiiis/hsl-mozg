@@ -8,17 +8,35 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 
 ## Commands
 
-- **Setup virtual environment**: 
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate  # On macOS/Linux
-  # or
-  venv\Scripts\activate  # On Windows
-  ```
-- **Install dependencies**: `pip install -r requirements.txt` (Python 3.11+ required)
-- **Run the bot**: `source venv/bin/activate && python bot.py`
-- **Setup database**: `docker-compose up -d` for local PostgreSQL
-- **Test database connection**: `source venv/bin/activate && python -c "from db.base import test_connection; test_connection()"`
+**Local Development Setup:**
+```bash
+# Setup and activation
+python3 -m venv venv
+source venv/bin/activate  # On macOS/Linux
+# or venv\Scripts\activate on Windows
+
+# Install dependencies (Python 3.11+ required)  
+pip install -r requirements.txt
+
+# Local database setup
+docker-compose up -d
+
+# Run the bot
+python bot.py
+```
+
+**Quick Start (Alternative):**
+```bash
+git clone https://github.com/riiiiiiiiis/hsl-mozg.git
+cd hsl-mozg
+pip install -r requirements.txt
+python bot.py
+```
+
+**Debugging and Testing:**
+- **Test database connection**: `python -c "from db.base import test_connection; test_connection()"`
+- **Check bot token**: Verify `BOT_TOKEN` is set in environment
+- **Local PostgreSQL access**: Connection available on `localhost:5432` with credentials from docker-compose.yml
 - **Configuration**: Create `.env` file with required variables (see Configuration Structure below)
 
 ## Architecture
@@ -128,18 +146,45 @@ This is a Telegram bot for "HashSlash School" that handles course bookings and p
 
 ### Configuration Structure
 
-Environment variables (set in `.env` file or system):
-- `DATABASE_URL` - PostgreSQL connection string
-- `BOT_TOKEN` - Telegram bot API token
-- `TARGET_CHAT_ID` - Chat ID for admin notifications
-- `ADMIN_CONTACT` - Admin contact for support
-- Payment details for multiple currencies:
-  - `TBANK_*` - Russian Ruble payment details
-  - `KASPI_*` - Kazakhstani Tenge payment details
-  - `ARS_*` - Argentine Peso payment details
-  - `USDT_*` - USDT (Tether) payment details
-- Exchange rates: `USD_TO_KZT_RATE`, `USD_TO_RUB_RATE`, `USD_TO_ARS_RATE`
-- Referral system configuration: `REFERRAL_*` variables for bot URL, parameters, discount settings
+**Required Environment Variables** (set in `.env` file or system):
+```env
+BOT_TOKEN=your_bot_token
+DATABASE_URL=postgresql://user:pass@host:port/db
+TARGET_CHAT_ID=admin_chat_id
+ADMIN_CONTACT=@your_admin_contact
+```
+
+**Payment Configuration:**
+```env
+# Russian Ruble payments
+TBANK_CARD_NUMBER=1234 5678 9012 3456
+TBANK_CARD_HOLDER=Name Surname
+
+# Kazakhstani Tenge payments  
+KASPI_CARD_NUMBER=1234 5678 9012 3456
+
+# Argentine Peso payments
+ARS_ALIAS=your.alias
+
+# USDT payments
+USDT_TRC20_ADDRESS=your_address
+BINANCE_ID=123456789
+CRYPTO_NETWORK=TRC-20
+```
+
+**Exchange Rates:**
+```env
+USD_TO_RUB_RATE=95.0
+USD_TO_KZT_RATE=470.0  
+USD_TO_ARS_RATE=1000.0
+```
+
+**Referral System:** `REFERRAL_*` variables for bot URL, parameters, discount settings
+
+**Local Development:** Docker-compose provides PostgreSQL on `localhost:5432` with credentials:
+- User: `botuser` 
+- Password: `botpassword`
+- Database: `botdb`
 
 ### Important Patterns
 
@@ -176,59 +221,58 @@ When modifying the bot:
   - Button click triggers callback handler that sends separate message with clickable link
   - `reminder_text` should end with friendly message like "Увидимся на уроке! 👋" (no URLs)
 
-### Common Development Tasks
+### Technology Stack
 
-- **Adding new free lessons**:
-  ```yaml
-  # In data/lessons.yaml
-  new_lesson:
-    id: 4  # Unique ID
-    title: "New Workshop"
-    button_text: "Register for Workshop"
-    description: "Full description..."
-    datetime: "2025-09-10T19:00:00+03:00"  # With timezone
+- **Python**: 3.11+ required
+- **Dependencies** (from requirements.txt):
+  - `python-telegram-bot[job-queue]>=20.0` - Telegram Bot API 
+  - `psycopg2-binary` - PostgreSQL adapter
+  - `python-dotenv` - Environment variable management
+  - `PyYAML>=6.0` - YAML file parsing
+- **Database**: PostgreSQL 14+
+- **Deployment**: Railway with GitHub auto-deploy
+- **Architecture**: Async/await throughout with polling mode (no webhooks)
+
+### Content Management
+
+The bot separates content from code using YAML files:
+
+**Course Management (data/courses.yaml):**
+```yaml
+courses:
+  - id: 1
+    name: "Вайб кодинг"
+    button_text: "Полный курс" 
+    description: "AI-powered programming course..."
+    price_usd: 150
     is_active: true
-    meeting_url: "https://meet.google.com/abc-defg-hij"  # Required for inline button
+    start_date_text: "1 сентября"
+```
+
+**Free Lessons (data/lessons.yaml):**
+```yaml
+lessons:
+  cursor_lesson:
+    id: 1
+    title: "Урок по Cursor"
+    button_text: "🆓 Бесплатный урок"
+    description: "Learn Cursor AI coding assistant..."
+    datetime: "2025-09-02T21:00:00+03:00"  # ISO format with timezone
+    is_active: true
+    meeting_url: "https://meet.google.com/abc-defg-hij"
     reminder_text: |
-      ⏰ Workshop starts in 15 minutes!
+      ⏰ Урок начинается через 15 минут!
       
       {description}
       
-      See you at the lesson! 👋
-  ```
-  **Important**: 
-  - Add `meeting_url` field to enable "🔗 Присоединиться к уроку" button
-  - DO NOT include meeting URLs in `reminder_text` - only through buttons
-  - End `reminder_text` with friendly message, no direct links
-  
-  Then reload cache: `from utils.lessons import reload_lessons; reload_lessons()`
+      Увидимся на уроке! 👋
+```
 
-- **Updating meeting URLs for existing lessons**:
-  ```yaml
-  # To add or change meeting URL
-  existing_lesson:
-    # ... other fields ...
-    meeting_url: "https://meet.google.com/new-meeting-url"  # Updates button link
-  ```
-  Bot restart required to apply changes to scheduled notifications.
-
-- **Testing payment flow locally**:
-  1. Start bot with test credentials
-  2. Send `/start` to initiate booking
-  3. Upload any image as payment receipt
-  4. Check admin chat for approval buttons
-  5. Click approve to complete flow
-
-- **Checking event logs**:
-  ```python
-  from db.events import get_recent_events
-  events = get_recent_events(limit=50)
-  ```
-
-- **Managing lesson visibility**:
-  - Set `is_active: false` to hide immediately
-  - Lessons auto-hide 2 hours after `datetime`
-  - Check active lessons: `from utils.lessons import get_active_lessons`
+**User Messages (locales/ru.py):**
+```python
+def get_text(category, key, **kwargs):
+    # Centralized text management with formatting
+```
 
 ### Testing & Debugging
 
@@ -326,3 +370,45 @@ When modifying the bot:
 - Connect via psql: `psql "postgresql://user:pass@host:port/db"`
 - Database credentials available through Railway variables (service: Postgres)
 - Railway-db Claude Code agent available for database operations
+
+### Key Bot Commands
+
+**User Commands:**
+- `/start` - Main menu with course/lesson options
+- `/start ref_CODE` - Activate referral code during registration
+- `/reset` - Clear user session data
+
+**Admin Commands:**
+- `/create_referral [percent] [max_uses]` - Generate discount coupon
+- `/referral_stats` - View referral usage statistics  
+- `/stats` - Overall bot usage analytics
+
+### Main User Flows
+
+**Course Booking Process:**
+1. User selects course → Shows price in multiple currencies
+2. Referral code validation (if provided) → Apply discount
+3. 1-hour booking hold created → Payment instructions sent
+4. User uploads payment receipt → Admin gets approval buttons
+5. Admin approves/rejects → User gets confirmation/refund instructions
+6. Event logging for analytics throughout process
+
+**Free Lesson Registration:**
+1. User selects lesson → Email input required
+2. Registration saved → Confirmation sent
+3. Automated reminder 15 minutes before lesson
+4. Meeting link delivered via inline button (URLs never in text messages)
+
+### Data Architecture
+
+**Core Tables:**
+- `bookings` - Course purchases with referral tracking
+- `free_lesson_registrations` - Lesson signups with email collection
+- `referral_coupons` & `referral_usage` - Discount system
+- `events` - Analytics and user interaction tracking
+
+**Content Separation:**
+- Course data: `data/courses.yaml` → Database sync on startup
+- Lesson data: `data/lessons.yaml` → Cached with auto-expiration
+- UI text: `locales/ru.py` → Centralized messaging system
+- Meeting URLs: Secured through inline buttons only
