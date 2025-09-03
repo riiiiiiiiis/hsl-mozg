@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 import config
 from handlers.callbacks import *
 from locales.ru import get_text
-from utils import escape_markdown_v2, get_approval_timestamp
+from utils import get_approval_timestamp
 from utils.lessons import get_lesson_by_id, get_lesson_by_type
 from utils.courses import get_course_by_id
 from db import bookings as db_bookings
@@ -141,16 +141,17 @@ async def handle_confirm_selection(query, context):
     price_kzt = round(discounted_price_usd * config.USD_TO_KZT_RATE, 2)
     price_ars = round(discounted_price_usd * config.USD_TO_ARS_RATE, 2)
 
-    esc_course_name = escape_markdown_v2(course['name'])
-    esc_booking_id = escape_markdown_v2(str(booking_id))
-    esc_notice = escape_markdown_v2(get_text("BOOKING", "DURATION_NOTICE"))
+    # No escaping needed for HTML
+    esc_course_name = course['name']
+    esc_booking_id = str(booking_id)
+    esc_notice = get_text("BOOKING", "DURATION_NOTICE")
     
-    # Экранируем реквизиты для безопасного отображения
-    esc_tbank_card = escape_markdown_v2(config.TBANK_CARD_NUMBER)
-    esc_tbank_holder = escape_markdown_v2(config.TBANK_CARD_HOLDER)
-    esc_kaspi_card = escape_markdown_v2(config.KASPI_CARD_NUMBER)
-    esc_ars_alias = escape_markdown_v2(config.ARS_ALIAS)
-    esc_usdt_address = escape_markdown_v2(config.USDT_TRC20_ADDRESS)
+    # Payment details without escaping for HTML
+    esc_tbank_card = config.TBANK_CARD_NUMBER
+    esc_tbank_holder = config.TBANK_CARD_HOLDER
+    esc_kaspi_card = config.KASPI_CARD_NUMBER
+    esc_ars_alias = config.ARS_ALIAS
+    esc_usdt_address = config.USDT_TRC20_ADDRESS
     
     message_text = get_text(
         "BOOKING_FLOW",
@@ -158,19 +159,19 @@ async def handle_confirm_selection(query, context):
         course_name=esc_course_name,
         booking_id=esc_booking_id,
         duration_notice=esc_notice,
-        price_rub=escape_markdown_v2(f"{price_rub:.2f}"),
+        price_rub=f"{price_rub:.2f}",
         tbank_card=esc_tbank_card,
         tbank_holder=esc_tbank_holder,
-        price_kzt=escape_markdown_v2(f"{price_kzt:.2f}"),
+        price_kzt=f"{price_kzt:.2f}",
         kaspi_card=esc_kaspi_card,
-        price_ars=escape_markdown_v2(f"{price_ars:.2f}"),
+        price_ars=f"{price_ars:.2f}",
         ars_alias=esc_ars_alias,
-        price_usdt=escape_markdown_v2(f"{discounted_price_usd:.2f}"),
+        price_usdt=f"{discounted_price_usd:.2f}",
         usdt_address=esc_usdt_address
     )
 
     keyboard = [[InlineKeyboardButton("❌ Отменить бронь", callback_data=f"{CALLBACK_CANCEL_RESERVATION}_{booking_id}")]]
-    await query.edit_message_text(message_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN_V2)
+    await query.edit_message_text(message_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 async def handle_cancel_reservation(query, context):
     """Handles cancellation of a pending reservation."""

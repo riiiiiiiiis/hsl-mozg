@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 import config
 from handlers.callbacks import *
 from locales.ru import get_text
-from utils import escape_markdown_v2, get_user_identification, get_course_flow_info
+from utils import get_user_identification, get_course_flow_info
 from utils.courses import get_course_by_id
 from utils.lessons import get_lesson_by_type
 from db import bookings as db_bookings
@@ -29,7 +29,7 @@ def _build_admin_notification_caption(user, booking_record, message_type, status
     Returns:
         str: Готовый caption для админа
     """
-    from utils import get_user_identification, get_course_flow_info, escape_markdown_v2
+    from utils import get_user_identification, get_course_flow_info
     from utils.courses import get_course_by_id
     
     booking_id = booking_record['id']
@@ -51,24 +51,24 @@ def _build_admin_notification_caption(user, booking_record, message_type, status
     
     # Message-specific header
     if message_type == 'photo_check':
-        header = r"🧾 *Новый чек для проверки\\!*"
+        header = "🧾 <b>Новый чек для проверки!</b>"
     elif message_type == 'student_response':
-        header = "💬 *Ответ студента*"
+        header = "💬 <b>Ответ студента</b>"
     elif message_type == 'alternative_payment':
-        header = r"📩 *Альтернативное подтверждение оплаты\\!*"
+        header = "📩 <b>Альтернативное подтверждение оплаты!</b>"
     else:
-        header = "📨 *Сообщение от студента*"
+        header = "📨 <b>Сообщение от студента</b>"
     
     caption = (
-        f"{header}\\n"
-        rf"Пользователь: {escape_markdown_v2(user_identification)} \\(ID: `{user.id}`\\)\\n"
-        f"Заявка №: *{escape_markdown_v2(str(booking_id))}*\\n"
-        f"Курс: *{escape_markdown_v2(course_name)}*\\n"
-        f"Поток: *{escape_markdown_v2(course_flow_info)}*"
+        f"{header}\n"
+        f"Пользователь: {user_identification} (ID: <code>{user.id}</code>)\n"
+        f"Заявка №: <b>{booking_id}</b>\n"
+        f"Курс: <b>{course_name}</b>\n"
+        f"Поток: <b>{course_flow_info}</b>"
     )
     
     if status_text:
-        caption += f"\\nСтатус: {escape_markdown_v2(status_text)}"
+        caption += f"\nСтатус: {status_text}"
     
     return caption
 
@@ -102,10 +102,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Booking {booking_id} for user {user.id} updated to 'payment uploaded' status (1).")
 
     await update.message.reply_text(
-        rf"🙏 Спасибо, {escape_markdown_v2(user.first_name)}\! Ваше фото для заявки №*{escape_markdown_v2(str(booking_id))}* "
-        rf"\(курс '*{escape_markdown_v2(course_name)}*' \) получено\.\n"
-        r"Оплата проверяется\. Мы сообщим вам о результате\.",
-        parse_mode=ParseMode.MARKDOWN_V2
+        f"🙏 Спасибо, {user.first_name}! Ваше фото для заявки №<b>{booking_id}</b> "
+        f"(курс '<b>{course_name}</b>') получено.\n"
+        "Оплата проверяется. Мы сообщим вам о результате.",
+        parse_mode='HTML'
     )
 
     if config.TARGET_CHAT_ID == 0:
@@ -131,7 +131,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=caption_for_admin,
         reply_markup=InlineKeyboardMarkup(admin_keyboard),
         reply_to_message_id=forwarded_message.message_id,
-        parse_mode=ParseMode.MARKDOWN_V2
+        parse_mode='HTML'
     )
 
 async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,16 +182,16 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Notify user about payment check
         await update.message.reply_text(
-            rf"📨 Сообщение получено для заявки №*{escape_markdown_v2(str(booking_id))}* "
-            rf"\(курс '*{escape_markdown_v2(course_name)}*'\)\."
-            r"\nМы проверим вашу оплату и сообщим о результате\.",
-            parse_mode=ParseMode.MARKDOWN_V2
+            f"📨 Сообщение получено для заявки №<b>{booking_id}</b> "
+            f"(курс '<b>{course_name}</b>').\n"
+            "Мы проверим вашу оплату и сообщим о результате.",
+            parse_mode='HTML'
         )
     elif booking_status == 2:
         # User is already approved, just acknowledge their response
         await update.message.reply_text(
-            rf"👍 Спасибо за ответ\\! Ваше сообщение получено\\.",
-            parse_mode=ParseMode.MARKDOWN_V2
+            "👍 Спасибо за ответ! Ваше сообщение получено.",
+            parse_mode='HTML'
         )
     
     if config.TARGET_CHAT_ID == 0:
@@ -214,7 +214,7 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat_id=config.TARGET_CHAT_ID,
             text=caption_for_admin,
             reply_to_message_id=forwarded_message.message_id,
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
     else:
         # Payment confirmation or alternative proof
@@ -233,7 +233,7 @@ async def any_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=caption_for_admin,
             reply_markup=InlineKeyboardMarkup(admin_keyboard),
             reply_to_message_id=forwarded_message.message_id,
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 async def handle_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 import config
 from handlers.callbacks import *
 from locales.ru import get_text
-from utils import escape_markdown_v2
+# Removed escape_markdown_v2 import - using HTML now
 from utils.lessons import get_active_lessons
 from utils.courses import get_active_courses
 from db import events as db_events
@@ -129,12 +129,12 @@ async def create_referral_command(update: Update, context: ContextTypes.DEFAULT_
         message_text = get_text(
             "REFERRAL_ADMIN",
             "CREATED_OK",
-            code=escape_markdown_v2(code),
+            code=code,
             discount=discount,
             activations=activations,
-            link=escape_markdown_v2(link)
+            link=link
         )
-        await update.message.reply_text(message_text, parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(message_text, parse_mode='HTML')
     except (ValueError, IndexError):
         await update.message.reply_text(get_text("REFERRAL_ADMIN", "INVALID_FORMAT"))
     except Exception as e:
@@ -164,14 +164,14 @@ async def referral_stats_command(update: Update, context: ContextTypes.DEFAULT_T
     for coupon in coupons:
         status = "✅ Активен" if coupon['is_active'] and coupon['current_activations'] < coupon['max_activations'] else "❌ Неактивен"
         lines.append(
-            f"{status} Код: `{escape_markdown_v2(coupon['code'])}`\n"
+            f"{status} Код: <code>{coupon['code']}</code>\n"
             f"   Скидка: {coupon['discount_percent']}%, "
-            rf"Исп\.: {coupon['current_activations']}/{coupon['max_activations']}\n"
+            f"Исп.: {coupon['current_activations']}/{coupon['max_activations']}\n"
             f"-------------------"
         )
     stats_block = "\n".join(lines) + "\n"
     message = get_text("REFERRAL_STATS", "TEMPLATE", stats_block=stats_block)
-    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(message, parse_mode='HTML')
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to get a quick statistics summary."""
@@ -193,7 +193,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bookings_today=stats['bookings_today'],
             confirmed_week=stats['confirmed_week']
         )
-        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(message, parse_mode='HTML')
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
         await update.message.reply_text("Не удалось получить статистику.")
