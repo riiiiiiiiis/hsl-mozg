@@ -111,5 +111,5 @@ courses:
       Оплата возможна переводом на карты Т-Банка, Каспи, в Аргентинских песо или USDT на крипто кошелек.
     price_usd: 300
     price_usd_cents: 30000
-    is_active: true
+    is_active: false
     start_date_text: "15 сентября"
