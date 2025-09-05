@@ -94,7 +94,7 @@ courses:
 
       📅 <b>ДЕТАЛИ И СТОИМОСТЬ</b>
       
-      <b>Старт:</b> 4 сентября
+      <b>Старт:</b> 1 октября
       <b>Расписание (выберите удобный слот):</b>
       • Среда 21:00 МСК
       • Четверг 18:00 МСК
@@ -110,10 +110,10 @@ courses:
     price_usd: 200
     price_usd_cents: 20000 # Автоматически вычисляется если не указано
     is_active: true
-    start_date_text: "4 сентября"
+    start_date_text: "1 октября"
     confirmation:
       stream_title: "Поток СЕВЕР"
-      dates_text: "4, 10, 17, 24 сентября"
+      dates_text: "1, 8, 15, 22 октября"
       first_live_calendar_link: "https://calendar.app.google/AcavEBkN1ZTMsQ1q6"
       group_invite_link: "https://t.me/+oxpLHOBteD41ZThi"
       support_contact: "@serejaris"
