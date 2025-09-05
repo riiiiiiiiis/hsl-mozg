@@ -94,7 +94,7 @@ async def handle_select_course(query, context):
         description=course['description']
     )
     
-    keyboard = [[InlineKeyboardButton("✅ Забронировать место", callback_data=CALLBACK_CONFIRM_COURSE_SELECTION)]]
+    keyboard = [[InlineKeyboardButton("🔥 Забронировать место на курсе", callback_data=CALLBACK_CONFIRM_COURSE_SELECTION)]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML', disable_web_page_preview=True)
 
 async def handle_confirm_selection(query, context):
